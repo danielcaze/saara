@@ -55,6 +55,14 @@ base madura pra adaptar.
 - **Destino em nuvem (Google Drive ou outro provedor) + compartilhamento**:
   V1 só grava em pasta local. V1.1 adiciona a opção de destino ser Drive (ou
   outro storage) em vez de/além do disco local, com opção de compartilhar.
+- **Versão mobile (PWA)**: versão futura (pós-V1) rodando no celular via PWA,
+  como MVP mobile. V1 é desktop Windows only (Electron). Origem continua
+  sendo cartão SD — mesmo adaptador usado no PC, agora ligado no celular
+  (USB-C/OTG). Implica repensar acesso a filesystem/exiftool no mobile (PWA
+  não tem processo main equivalente ao Electron; acesso a SD via celular
+  depende de API do browser tipo File System Access, com suporte/limites
+  ainda não pesquisados) — não detalhado ainda, só registrado como direção
+  futura.
 
 ## Modelo funcional (V1)
 
@@ -86,6 +94,37 @@ base madura pra adaptar.
 - **Renderer**: tela de seleção origem/destino, tela de preview/edição de
   grupos, tela de progresso de cópia.
 - **Empacotamento**: `electron-builder` gerando instalador Windows.
+
+### Preparo pro PWA mobile futuro (convenção, não implementação)
+
+Decisão de arquitetura sênior via brainstorming (2026-08-11): não construir
+abstrações agora pra um segundo runtime (PWA) que ainda não existe —
+interface desenhada sem um segundo caso real pra validar contra tende a
+sair errada. Em vez disso, travar convenções baratas que já são verdade no
+plano V1 e evitam retrabalho sem custo de complexidade hoje:
+
+- **`src/shared/` fica sem dependência de Node/Electron, sempre.** O
+  algoritmo de clustering (`clusterByGap`) e sugestão de nome
+  (`suggestGroupName`) já são funções puras TypeScript — regra passa a ser
+  intencional, não coincidência: nenhum import de `fs`, `path`, `electron`
+  etc. entra nesses arquivos. Isso é o que permite reuso direto (via cópia
+  do módulo ou publicação como pacote) numa futura PWA sem reescrever a
+  lógica de agrupamento.
+- **Os tipos de dados (`FileMeta`, `PhotoGroup`, `CopySummary`, etc.) são
+  formas de dado neutras**, não amarradas a IPC do Electron — um futuro
+  cliente PWA pode mirar no mesmo contrato de tipos mesmo sem compartilhar
+  runtime.
+- **Gaps conhecidos, propositalmente não resolvidos agora** (ficam pra
+  quando a PWA for de fato especificada):
+  - Leitura de metadata no browser precisa de lib diferente do
+    `exiftool-vendored` (binário nativo, não roda em browser) — algo tipo
+    `exifr` (JS/WASM), com cobertura de RAW provavelmente pior que
+    ExifTool. Não pesquisado ainda.
+  - Acesso a pasta/SD card via celular depende de suporte de File System
+    Access API (ou equivalente) em browser mobile — suporte hoje é
+    incerto/limitado. Não pesquisado ainda.
+  - Extração de thumbnail embutido no browser é outro mecanismo, não
+    reaproveita o código de `extractThumbnail.ts` (que usa exiftool).
 
 ## Testes
 
