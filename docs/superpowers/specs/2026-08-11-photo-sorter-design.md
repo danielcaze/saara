@@ -1,4 +1,4 @@
-# Photo Sorter — App desktop de importação/organização de fotos por evento
+# Saara — App desktop de importação/organização de fotos por evento
 
 ## Context
 
@@ -91,9 +91,72 @@ base madura pra adaptar.
 - **Electron** (main + renderer), **TypeScript**, UI em **React**.
 - **Main process**: acesso a filesystem (leitura de diretório, cópia de
   arquivo), chamadas ao `exiftool-vendored`, algoritmo de clustering.
-- **Renderer**: tela de seleção origem/destino, tela de preview/edição de
-  grupos, tela de progresso de cópia.
+- **Renderer**: 2 telas (`SetupScreen`, `ReviewScreen` — ver seção "Design de
+  UI" abaixo), cada uma com sub-estados internos via componentes, em vez de
+  navegação entre múltiplas telas cheias.
 - **Empacotamento**: `electron-builder` gerando instalador Windows.
+
+## Design de UI (Saara)
+
+Decidido via brainstorming (2026-08-11), reação explícita contra estética
+genérica de "AI slop" (gradiente indigo, glassmorphism, card com sombra em
+tudo, ícone emoji, dashboard corporativo).
+
+**Identidade**
+- Nome do app: **Saara**.
+- Idioma da UI (labels, botões, nome do grupo "Sem data", etc.): **Português**
+  — isso substitui a decisão anterior de "inglês" tomada durante o plan
+  mode; a UI inteira é em português.
+
+**Tema visual — contact-sheet / darkroom**
+- Dark theme, fundo quase preto (não preto puro).
+- Cor de destaque: **vermelho escuro** (tom "luz de câmara escura"), usada
+  com moderação — botão de ação primária, estado selecionado/editando,
+  barra de progresso, nunca como fundo grande.
+- Layout: **coluna única centralizada**, sem sidebar/rail lateral, largura
+  máxima (~900–1000px), margens generosas em janelas largas.
+- Tipografia: sans do sistema pra labels/texto; **monospace com números
+  tabulares** pra tudo numérico/temporal (contagem de arquivos, datas,
+  timestamps, progresso "12/340") — remete a carimbo de metadata de
+  câmera/filme.
+- Bordas: **levemente arredondadas** (raio pequeno, tipo 4–6px) — itens
+  continuam com cara "quadrada", não pill/rounded-full em nada.
+- Sem sombra de elevação, sem gradiente — divisores hairline (1px, cor
+  quase igual ao fundo) separam grupos em vez de cards flutuando.
+- **Ícones**: [Phosphor Icons](https://phosphoricons.com) via
+  `@phosphor-icons/react` — zero emoji em qualquer lugar da UI.
+- **Animações**: simples e modernas, não devem chamar mais atenção que o
+  conteúdo. Transições CSS puras (opacity/transform) pra micro-interação
+  (hover de botão, preenchimento de barra de progresso); para as trocas de
+  sub-estado dentro de cada tela (setup → analisando → concluído; revisão →
+  copiando → resumo), usar `framer-motion` (`motion/react`) — orquestra
+  enter/exit de forma muito mais simples que CSS puro pra esse caso
+  específico, e é a escolha pragmática mesmo mantendo o resto do app
+  deliberadamente livre de dependências extras.
+- **Validação de input**: `zod` — valida threshold (número positivo),
+  caminhos de pasta antes de disparar `import:analyze`/`copy:start` via IPC,
+  em vez de checagem manual ad-hoc espalhada pelos componentes.
+- **Design tokens centralizados**: cores, espaçamento, raio de borda,
+  tipografia definidos num lugar só (CSS custom properties em
+  `src/renderer/src/theme.css`, ou objeto TS equivalente) — telas e
+  componentes consomem os tokens, não valores soltos.
+
+**Telas (substituem as 3 do plano original por 2, com sub-estados internos)**
+
+1. **`SetupScreen`** — `FolderPicker` (origem), `FolderPicker` (destino),
+   `ThresholdInput` (horas, default 24, validado via zod), botão "Analisar".
+   Ao clicar, o botão dá lugar a `AnalyzeProgress` inline (fase atual +
+   contagem) na mesma tela — sem navegar. Ao terminar, transição automática
+   (via `framer-motion`) pra `ReviewScreen`.
+2. **`ReviewScreen`** — header com contagem total, `ThresholdInput` (reajusta
+   e reclusteriza ao vivo sem re-scan), lista de `GroupCard` (thumbnail
+   grid, nome editável, contagem, intervalo de data — ícones Phosphor pra
+   tipo de mídia/estado), botão "Confirmar e copiar" no rodapé. Ao
+   confirmar, a área do botão vira `CopyProgress` inline; ao terminar, vira
+   `CopySummary` (copiados/conflitos/erros + botão "Abrir pasta destino").
+
+Componentes menores mantidos do design original: `GroupCard`, `Thumbnail`
+(ícone Phosphor genérico pra vídeo, sem emoji), `ProgressBar`.
 
 ### Preparo pro PWA mobile futuro (convenção, não implementação)
 
