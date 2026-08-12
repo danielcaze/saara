@@ -26,6 +26,10 @@ function createWindow(): void {
     window.show()
   })
 
+  window.on('closed', () => {
+    mainWindow = null
+  })
+
   window.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }

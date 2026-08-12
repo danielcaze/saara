@@ -25,7 +25,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle(IPC.ANALYZE, async (_event, payload) => {
     const { sourcePath, thresholdMs } = analyzeRequestSchema.parse(payload)
     const groups = await analyzeSource(sourcePath, thresholdMs, (progress) => {
-      getWindow()?.webContents.send(IPC.ANALYZE_PROGRESS, progress)
+      const win = getWindow()
+      if (win && !win.isDestroyed()) {
+        win.webContents.send(IPC.ANALYZE_PROGRESS, progress)
+      }
     })
     return { groups }
   })
@@ -44,7 +47,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle(IPC.COPY_START, async (_event, payload) => {
     const { destinationRoot, groups } = copyStartRequestSchema.parse(payload)
     return runCopyPlan({ destinationRoot, groups }, (progress) => {
-      getWindow()?.webContents.send(IPC.COPY_PROGRESS, progress)
+      const win = getWindow()
+      if (win && !win.isDestroyed()) {
+        win.webContents.send(IPC.COPY_PROGRESS, progress)
+      }
     })
   })
 
