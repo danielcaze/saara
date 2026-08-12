@@ -68,7 +68,7 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-export interface ImportWorkflow {
+interface ImportWorkflow {
   state: State
   pickSource: () => Promise<void>
   pickDestination: () => Promise<void>
