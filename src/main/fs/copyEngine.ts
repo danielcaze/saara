@@ -25,38 +25,37 @@ function uniqueFolderPath(desiredName: string, taken: Set<string>): string {
   return candidate
 }
 
-async function uniqueFilePath(
-  dir: string,
+// Synchronous name-claiming: checking `existingNames.has` and then
+// `existingNames.add` with no `await` in between means the check-and-claim
+// cannot be interrupted mid-way. JS's single-threaded execution guarantees a
+// synchronous function body runs to completion without interleaving with
+// other concurrent workers, which is what actually closes the TOCTOU race
+// that an async, filesystem-polling version of this function was exposed to.
+function claimUniqueFileName(
+  existingNames: Set<string>,
   fileName: string
-): Promise<{ finalName: string; wasConflict: boolean }> {
+): { finalName: string; wasConflict: boolean } {
   const ext = path.extname(fileName)
   const base = fileName.slice(0, fileName.length - ext.length)
   let candidate = fileName
   let counter = 1
   let wasConflict = false
-  while (await pathExists(path.join(dir, candidate))) {
+  while (existingNames.has(candidate)) {
     candidate = `${base} (${counter})${ext}`
     counter++
     wasConflict = true
   }
+  existingNames.add(candidate)
   return { finalName: candidate, wasConflict }
-}
-
-async function pathExists(p: string): Promise<boolean> {
-  try {
-    await fs.access(p)
-    return true
-  } catch {
-    return false
-  }
 }
 
 async function copyOne(
   sourcePath: string,
   destDir: string,
-  fileName: string
+  fileName: string,
+  existingNames: Set<string>
 ): Promise<{ resolvedName: string; conflict: boolean }> {
-  const { finalName, wasConflict } = await uniqueFilePath(destDir, fileName)
+  const { finalName, wasConflict } = claimUniqueFileName(existingNames, fileName)
   const destPath = path.join(destDir, finalName)
   await fs.copyFile(sourcePath, destPath)
   const stat = await fs.stat(sourcePath)
@@ -98,11 +97,17 @@ export async function runCopyPlan(
     const folderName = uniqueFolderPath(sanitizeFolderName(group.name), takenFolderNames)
     const destDir = path.join(plan.destinationRoot, folderName)
     await fs.mkdir(destDir, { recursive: true })
+    const existingNames = new Set(await fs.readdir(destDir))
 
     await runPool(group.files, CONCURRENCY, async (file) => {
       summary.totalFiles++
       try {
-        const { resolvedName, conflict } = await copyOne(file.sourcePath, destDir, file.fileName)
+        const { resolvedName, conflict } = await copyOne(
+          file.sourcePath,
+          destDir,
+          file.fileName,
+          existingNames
+        )
         summary.copiedFiles++
         if (conflict) {
           summary.conflicts.push({ originalName: file.fileName, resolvedName })

@@ -143,6 +143,40 @@ describe('runCopyPlan', () => {
     expect(entries.sort()).toEqual(['Trip Paris', 'Trip Paris (2)'])
   })
 
+  it('never silently overwrites when two files in the same group share a filename (concurrency race)', async () => {
+    const srcA = path.join(srcDir, 'a')
+    const srcB = path.join(srcDir, 'b')
+    await fs.mkdir(srcA, { recursive: true })
+    await fs.mkdir(srcB, { recursive: true })
+    const f1 = path.join(srcA, 'IMG_0001.jpg')
+    const f2 = path.join(srcB, 'IMG_0001.jpg')
+    await fs.writeFile(f1, 'content-from-camera-A')
+    await fs.writeFile(f2, 'content-from-camera-B')
+
+    const plan: CopyPlan = {
+      destinationRoot: destDir,
+      groups: [
+        {
+          id: 'group-0',
+          name: 'g',
+          files: [
+            { sourcePath: f1, fileName: 'IMG_0001.jpg' },
+            { sourcePath: f2, fileName: 'IMG_0001.jpg' },
+          ],
+        },
+      ],
+    }
+    const summary = await runCopyPlan(plan, () => {})
+
+    // Both files must survive under distinct names, no data loss
+    const destFiles = await fs.readdir(path.join(destDir, 'g'))
+    expect(destFiles).toHaveLength(2)
+    const contents = await Promise.all(destFiles.map((f) => fs.readFile(path.join(destDir, 'g', f), 'utf-8')))
+    expect(contents.sort()).toEqual(['content-from-camera-A', 'content-from-camera-B'])
+    expect(summary.copiedFiles).toBe(2)
+    expect(summary.conflicts).toHaveLength(1)
+  })
+
   it("doesn't abort the rest of the job when one file fails", async () => {
     const f1 = await writeSrcFile('good.jpg')
     const plan: CopyPlan = {
