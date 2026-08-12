@@ -22,7 +22,7 @@ export function GroupCard({ group, onRename }: Props): React.JSX.Element {
         <span className="tabular-nums">
           {group.isNoDateGroup
             ? 'Sem data'
-            : group.startDate === group.endDate
+            : group.startDate?.slice(0, 10) === group.endDate?.slice(0, 10)
               ? group.startDate?.slice(0, 10)
               : `${group.startDate?.slice(0, 10)} – ${group.endDate?.slice(0, 10)}`}
         </span>
