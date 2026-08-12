@@ -114,4 +114,19 @@ describe('clusterByGap', () => {
     const run2 = clusterByGap(files, DAY)
     expect(run1.map((g) => g.id)).toEqual(run2.map((g) => g.id))
   })
+
+  it('treats an invalid Date the same as a missing timestamp', () => {
+    const t0 = d('2026-08-01T10:00:00Z')
+    const invalidDate = new Date('not-a-real-date')
+    const files: TimestampedFile[] = [
+      { path: 'a.jpg', timestamp: t0 },
+      { path: 'corrupt.jpg', timestamp: invalidDate },
+    ]
+    const groups = clusterByGap(files, DAY)
+    expect(groups).toHaveLength(2)
+    expect(groups[0].isNoDateGroup).toBe(false)
+    expect(groups[0].files.map((f) => f.path)).toEqual(['a.jpg'])
+    expect(groups[1].isNoDateGroup).toBe(true)
+    expect(groups[1].files.map((f) => f.path)).toEqual(['corrupt.jpg'])
+  })
 })

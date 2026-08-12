@@ -11,9 +11,13 @@ export interface PhotoGroupResult {
   isNoDateGroup: boolean
 }
 
+function hasValidTimestamp(f: TimestampedFile): boolean {
+  return f.timestamp !== null && !Number.isNaN(f.timestamp.getTime())
+}
+
 export function clusterByGap(files: TimestampedFile[], thresholdMs: number): PhotoGroupResult[] {
-  const dated = files.filter((f) => f.timestamp !== null)
-  const undated = files.filter((f) => f.timestamp === null)
+  const dated = files.filter(hasValidTimestamp)
+  const undated = files.filter((f) => !hasValidTimestamp(f))
 
   dated.sort((a, b) => {
     const diff = a.timestamp!.getTime() - b.timestamp!.getTime()
