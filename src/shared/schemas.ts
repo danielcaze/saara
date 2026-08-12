@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const thresholdHoursSchema = z
+const thresholdHoursSchema = z
   .number({ error: 'Informe um número.' })
   .positive('O intervalo deve ser maior que zero.')
   .max(24 * 30, 'O intervalo máximo é 720 horas (30 dias).')
