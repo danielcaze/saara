@@ -1,6 +1,7 @@
-appId: com.electron.app
-productName: saara
+appId: com.saara.app
+productName: Saara
 directories:
+  output: release
   buildResources: build
 files:
   - '!**/.vscode/*'
@@ -11,9 +12,14 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+  - node_modules/exiftool-vendored.exe/**
+  - node_modules/exiftool-vendored.pl/**
 win:
   executableName: saara
+  target: nsis
 nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
