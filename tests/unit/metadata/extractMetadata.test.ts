@@ -18,7 +18,7 @@ describe('extractFileMetadata', () => {
   })
 
   it('extracts a creation date from a video', async () => {
-    const result = await extractFileMetadata(fixture('sample-video.mp4'), 'video')
+    const result = await extractFileMetadata(fixture('sample-video.avi'), 'video')
     expect(result.timestamp).not.toBeNull()
     expect(['DateTimeOriginal', 'CreateDate', 'MediaCreateDate']).toContain(result.timestampSource)
   })
