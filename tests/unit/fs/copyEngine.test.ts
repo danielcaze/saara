@@ -20,6 +20,7 @@ afterEach(async () => {
 
 async function writeSrcFile(name: string, content = 'x') {
   const full = path.join(srcDir, name)
+  await fs.mkdir(path.dirname(full), { recursive: true })
   await fs.writeFile(full, content)
   return full
 }
