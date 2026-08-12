@@ -41,7 +41,14 @@ export async function extractFileMetadata(
       }
     }
 
-    return { path: filePath, mediaType, timestamp: null, timestampSource: null }
+    const firstIssue = tags.errors?.[0] ?? tags.warnings?.[0]
+    return {
+      path: filePath,
+      mediaType,
+      timestamp: null,
+      timestampSource: null,
+      ...(firstIssue ? { error: firstIssue } : {}),
+    }
   } catch (err) {
     return {
       path: filePath,
