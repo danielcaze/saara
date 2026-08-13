@@ -54,4 +54,4 @@ Installed as a devDependency (`npm run smell` runs dead-code + dupes + health --
 
 - Do not edit: `out/`, `release/`, `.git/` — build/packaging output, never source.
 - Always ask before: `npm run dev` (opens a real Electron window) or `npm run build:win` (heavy build) if the user hasn't explicitly requested it in the current task.
-- Preferred style: Portuguese for all UI-facing strings (labels, buttons, group names); English for code/comments/commit messages. No `Co-Authored-By` trailer on commits.
+- Preferred style: English for all UI-facing strings and code/comments/commit messages (as of V1.1 — the app was Portuguese-only in V1, reversed when the project moved toward open source; see `docs/superpowers/specs/2026-08-12-saara-v1.1-home-redesign-design.md`). No `Co-Authored-By` trailer on commits.

@@ -98,6 +98,8 @@ base madura pra adaptar.
 
 ## Design de UI (Saara)
 
+> **Atualização (2026-08-12):** o idioma da UI foi revertido para inglês na V1.1 — ver `docs/superpowers/specs/2026-08-12-saara-v1.1-home-redesign-design.md`. O restante desta seção documenta as decisões originais da V1 (histórico), não o estado atual do app.
+
 Decidido via brainstorming (2026-08-11), reação explícita contra estética
 genérica de "AI slop" (gradiente indigo, glassmorphism, card com sombra em
 tudo, ícone emoji, dashboard corporativo).
