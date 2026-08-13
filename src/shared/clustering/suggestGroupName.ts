@@ -6,7 +6,7 @@ function toDateStamp(d: Date): string {
 
 export function suggestGroupName(group: PhotoGroupResult): string {
   if (group.isNoDateGroup || !group.startDate || !group.endDate) {
-    return 'Sem data'
+    return 'No date'
   }
   const start = toDateStamp(group.startDate)
   const end = toDateStamp(group.endDate)

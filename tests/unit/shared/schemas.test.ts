@@ -22,9 +22,9 @@ describe('validateThresholdHours', () => {
     expect(validateThresholdHours(720)).toEqual({ ok: true })
   })
 
-  it('returns a Portuguese error message on failure', () => {
+  it('returns an English error message on failure', () => {
     const result = validateThresholdHours(0)
     if (result.ok) throw new Error('expected failure')
-    expect(result.message).toMatch(/maior que zero/)
+    expect(result.message).toMatch(/greater than zero/)
   })
 })

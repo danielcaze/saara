@@ -25,7 +25,7 @@ describe('suggestGroupName', () => {
     expect(suggestGroupName(group)).toBe('2026-08-09_a_2026-08-11')
   })
 
-  it('suggests "Sem data" for the no-date group', () => {
+  it('suggests "No date" for the no-date group', () => {
     const group: PhotoGroupResult = {
       id: 'group-nodate',
       files: [],
@@ -33,6 +33,6 @@ describe('suggestGroupName', () => {
       endDate: null,
       isNoDateGroup: true,
     }
-    expect(suggestGroupName(group)).toBe('Sem data')
+    expect(suggestGroupName(group)).toBe('No date')
   })
 })
