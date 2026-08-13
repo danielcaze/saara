@@ -188,3 +188,127 @@ button.icon-button {
   background: var(--color-accent);
   transition: width 200ms ease;
 }
+
+/* --- V1.1 home redesign additions below --- */
+
+html,
+body {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.screen-flex-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.home-screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.screen-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-shrink: 0;
+}
+
+.dropzone-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.dropzone {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.dropzone:hover {
+  border-color: var(--color-text-muted);
+}
+
+.dropzone-active {
+  border-color: var(--color-accent);
+  background: rgba(127, 29, 29, 0.08);
+  color: var(--color-text);
+}
+
+.dropzone[data-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.dropzone-label {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.dropzone-hint {
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.dropzone-path {
+  font-size: 0.8125rem;
+  color: var(--color-text);
+  text-align: center;
+  word-break: break-all;
+}
+
+.home-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: var(--space-4);
+}
+
+.sticky-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* Remove the native number-input spinner arrows (Chromium; Electron ships no other engine) */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type='number'] {
+  -moz-appearance: textfield;
+}
