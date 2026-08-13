@@ -54,7 +54,7 @@ function reducer(state: State, action: Action): State {
         copySummary: null
       }
     case 'SET_DESTINATION':
-      return { ...state, destinationPath: action.path }
+      return { ...state, destinationPath: action.path, copySummary: null }
     case 'SET_THRESHOLD_HOURS':
       return { ...state, thresholdHours: action.hours }
     case 'ANALYZE_PROGRESS':

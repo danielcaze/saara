@@ -48,7 +48,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
         <h1 className="wordmark" style={{ marginRight: 'auto' }}>
           Saara
         </h1>
-        <button className="icon-button" onClick={onOpenSettings}>
+        <button className="icon-button" onClick={onOpenSettings} disabled={boxesDisabled}>
           <Gear size={18} />
         </button>
       </div>
