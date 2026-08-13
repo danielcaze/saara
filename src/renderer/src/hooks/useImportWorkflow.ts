@@ -46,7 +46,13 @@ const initialState: State = {
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'SET_SOURCE':
-      return { ...state, sourcePath: action.path, groups: [], analyzeError: null, copySummary: null }
+      return {
+        ...state,
+        sourcePath: action.path,
+        groups: [],
+        analyzeError: null,
+        copySummary: null
+      }
     case 'SET_DESTINATION':
       return { ...state, destinationPath: action.path }
     case 'SET_THRESHOLD_HOURS':
