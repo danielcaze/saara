@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { IPC } from '../shared/ipcChannels'
 import type {
@@ -9,6 +9,7 @@ import type {
   MediaType,
   PhotoGroup
 } from '../shared/types'
+import type { Settings } from '../shared/settingsSchema'
 
 // Custom APIs for renderer
 const api = {}
@@ -41,7 +42,13 @@ const saaraAPI = {
     return () => ipcRenderer.removeListener(IPC.COPY_PROGRESS, listener)
   },
 
-  openPath: (path: string): Promise<void> => ipcRenderer.invoke(IPC.OPEN_PATH, { path })
+  openPath: (path: string): Promise<void> => ipcRenderer.invoke(IPC.OPEN_PATH, { path }),
+
+  getSettings: (): Promise<Settings> => ipcRenderer.invoke(IPC.SETTINGS_GET),
+
+  setSettings: (settings: Settings): Promise<void> => ipcRenderer.invoke(IPC.SETTINGS_SET, settings),
+
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

@@ -7,4 +7,6 @@ export const IPC = {
   COPY_START: 'copy:start',
   COPY_PROGRESS: 'copy:progress',
   OPEN_PATH: 'shell:openPath',
+  SETTINGS_GET: 'settings:get',
+  SETTINGS_SET: 'settings:set',
 } as const

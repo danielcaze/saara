@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
+import { ipcMain, dialog, shell, BrowserWindow, app } from 'electron'
 import { IPC } from '../../shared/ipcChannels'
 import {
   selectFolderRequestSchema,
@@ -7,17 +7,19 @@ import {
   getThumbnailRequestSchema,
   copyStartRequestSchema,
   openPathRequestSchema,
+  settingsSetRequestSchema,
 } from '../../shared/ipcSchemas'
 import { analyzeSource, recluster } from '../importSession'
 import { runCopyPlan } from '../fs/copyEngine'
 import { extractThumbnail } from '../thumbnails/extractThumbnail'
+import { getSettings, setSettings } from '../settings/settingsStore'
 
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle(IPC.SELECT_FOLDER, async (_event, payload) => {
     const { role } = selectFolderRequestSchema.parse(payload)
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory'],
-      title: role === 'source' ? 'Selecionar pasta de origem (cartão SD)' : 'Selecionar pasta de destino',
+      title: role === 'source' ? 'Select source folder (SD card)' : 'Select destination folder',
     })
     return result.canceled ? null : result.filePaths[0]
   })
@@ -57,5 +59,14 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle(IPC.OPEN_PATH, async (_event, payload) => {
     const { path } = openPathRequestSchema.parse(payload)
     await shell.openPath(path)
+  })
+
+  ipcMain.handle(IPC.SETTINGS_GET, async () => {
+    return getSettings(app.getPath('userData'))
+  })
+
+  ipcMain.handle(IPC.SETTINGS_SET, async (_event, payload) => {
+    const settings = settingsSetRequestSchema.parse(payload)
+    await setSettings(app.getPath('userData'), settings)
   })
 }

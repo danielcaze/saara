@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { settingsSchema } from './settingsSchema'
 
 export const selectFolderRequestSchema = z.object({
   role: z.enum(['source', 'destination']),
@@ -37,3 +38,5 @@ export const copyStartRequestSchema = z.object({
 export const openPathRequestSchema = z.object({
   path: z.string().min(1),
 })
+
+export const settingsSetRequestSchema = settingsSchema
