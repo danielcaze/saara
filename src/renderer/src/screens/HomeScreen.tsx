@@ -48,8 +48,13 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
         <h1 className="wordmark" style={{ marginRight: 'auto' }}>
           S<span className="wordmark-accent">a</span>ara
         </h1>
-        <button className="icon-button" onClick={onOpenSettings} disabled={boxesDisabled}>
-          <Gear size={18} />
+        <button
+          className="icon-button"
+          onClick={onOpenSettings}
+          disabled={boxesDisabled}
+          aria-label="Settings"
+        >
+          <Gear size={18} aria-hidden="true" />
         </button>
       </div>
 
@@ -57,7 +62,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
         <Dropzone
           label="Source"
           hint="Drop folder or click to browse"
-          icon={<FolderOpen size={28} />}
+          icon={<FolderOpen size={28} aria-hidden="true" />}
           path={state.sourcePath}
           onPick={pickSource}
           onDropPath={dropSource}
@@ -66,7 +71,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
         <Dropzone
           label="Destination"
           hint="Drop folder or click to browse"
-          icon={<FolderPlus size={28} />}
+          icon={<FolderPlus size={28} aria-hidden="true" />}
           path={state.destinationPath}
           onPick={pickDestination}
           onDropPath={dropDestination}
@@ -163,20 +168,22 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
               transition={{ duration: 0.15 }}
             >
               <h1>
-                <CheckCircle size={22} /> Copy complete
+                <CheckCircle size={22} aria-hidden="true" /> Copy complete
               </h1>
               <p className="tabular-nums">
                 {state.copySummary.copiedFiles}/{state.copySummary.totalFiles} files copied
               </p>
               {state.copySummary.conflicts.length > 0 && (
                 <p>
-                  <WarningCircle size={16} /> {state.copySummary.conflicts.length} name conflicts
-                  resolved (renamed, nothing overwritten)
+                  <WarningCircle size={16} aria-hidden="true" />{' '}
+                  {state.copySummary.conflicts.length} name conflicts resolved (renamed, nothing
+                  overwritten)
                 </p>
               )}
               {state.copySummary.errors.length > 0 && (
                 <p>
-                  <WarningCircle size={16} /> {state.copySummary.errors.length} files failed to copy
+                  <WarningCircle size={16} aria-hidden="true" /> {state.copySummary.errors.length}{' '}
+                  files failed to copy
                 </p>
               )}
               <button
@@ -186,7 +193,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
                   state.destinationPath && window.saaraAPI.openPath(state.destinationPath)
                 }
               >
-                <FolderOpen size={18} /> Open destination folder
+                <FolderOpen size={18} aria-hidden="true" /> Open destination folder
               </button>
             </motion.div>
           )}

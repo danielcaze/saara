@@ -33,8 +33,8 @@ export function SettingsScreen({ workflow, onBack }: Props): React.JSX.Element {
   return (
     <div>
       <div className="screen-header">
-        <button className="icon-button" onClick={onBack}>
-          <CaretLeft size={18} />
+        <button className="icon-button" onClick={onBack} aria-label="Back">
+          <CaretLeft size={18} aria-hidden="true" />
         </button>
         <h1 className="wordmark">Settings</h1>
       </div>

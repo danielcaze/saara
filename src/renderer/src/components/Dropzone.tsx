@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ReactNode, DragEvent } from 'react'
+import type { ReactNode, DragEvent, KeyboardEvent } from 'react'
 
 interface Props {
   label: string
@@ -41,11 +41,26 @@ export function Dropzone({
     if (droppedPath) onDropPath(droppedPath)
   }
 
+  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>): void {
+    if (disabled) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onPick()
+    }
+  }
+
+  const accessibleLabel = `${label}: ${path ? path : hint}`
+
   return (
     <div
       className={`dropzone${isDragOver ? ' dropzone-active' : ''}`}
       data-disabled={disabled ? 'true' : 'false'}
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-disabled={disabled ? 'true' : undefined}
+      aria-label={accessibleLabel}
       onClick={disabled ? undefined : onPick}
+      onKeyDown={handleKeyDown}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}

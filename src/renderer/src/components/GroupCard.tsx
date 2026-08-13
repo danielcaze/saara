@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { CaretRight, CaretDown } from '@phosphor-icons/react'
 import type { PhotoGroup } from '../../../shared/types'
 import { Thumbnail } from './Thumbnail'
@@ -10,14 +10,32 @@ interface Props {
 
 export function GroupCard({ group, onRename }: Props): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
+  const renameInputId = useId()
 
   return (
     <div className="group-card">
       <div className="group-card-header">
-        <button className="icon-button" onClick={() => setExpanded((v) => !v)}>
-          {expanded ? <CaretDown size={16} /> : <CaretRight size={16} />}
+        <button
+          className="icon-button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-label={expanded ? 'Collapse group' : 'Expand group'}
+        >
+          {expanded ? (
+            <CaretDown size={16} aria-hidden="true" />
+          ) : (
+            <CaretRight size={16} aria-hidden="true" />
+          )}
         </button>
-        <input className="field" value={group.name} onChange={(e) => onRename(e.target.value)} />
+        <label htmlFor={renameInputId} className="visually-hidden">
+          Group name
+        </label>
+        <input
+          id={renameInputId}
+          className="field"
+          value={group.name}
+          onChange={(e) => onRename(e.target.value)}
+        />
         <span className="tabular-nums">{group.files.length} files</span>
         <span className="tabular-nums">
           {group.isNoDateGroup
