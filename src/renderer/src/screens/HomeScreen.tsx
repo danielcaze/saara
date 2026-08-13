@@ -40,7 +40,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           : state.groups.length > 0
             ? 'reviewing'
             : 'empty'
-  const boxesDisabled = state.copying
+  const boxesDisabled = state.copying || !!state.analyzeProgress
 
   return (
     <div className="home-screen">
