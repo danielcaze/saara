@@ -19,6 +19,9 @@
   --space-4: 24px;
   --space-5: 40px;
 
+  --color-accent-soft: rgba(127, 29, 29, 0.14);
+  --color-accent-softer: rgba(127, 29, 29, 0.07);
+
   --font-sans: -apple-system, 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'SFMono-Regular', 'Cascadia Mono', Consolas, monospace;
 
@@ -29,11 +32,42 @@
   box-sizing: border-box;
 }
 
+:focus-visible {
+  outline: 2px solid var(--color-accent-hover);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+
 body {
   margin: 0;
-  background: var(--color-bg);
+  background:
+    radial-gradient(ellipse 900px 500px at 15% -10%, var(--color-accent-softer), transparent),
+    var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-accent);
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-hover);
 }
 
 .app-shell {
@@ -46,6 +80,10 @@ body {
   font-weight: 600;
   letter-spacing: 0.02em;
   margin-bottom: var(--space-4);
+}
+
+.wordmark-accent {
+  color: var(--color-accent-hover);
 }
 
 .tabular-nums {
@@ -131,6 +169,14 @@ button.icon-button {
   color: var(--color-text);
   padding: var(--space-1);
   cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+button.icon-button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent-hover);
 }
 
 .hairline-divider {
@@ -141,7 +187,9 @@ button.icon-button {
 
 .group-card {
   border-bottom: 1px solid var(--color-border);
-  padding: var(--space-3) 0;
+  border-left: 2px solid var(--color-accent);
+  padding: var(--space-3) var(--space-3);
+  margin-bottom: var(--space-2);
 }
 
 .group-card-header {
@@ -192,7 +240,8 @@ button.icon-button {
 /* --- V1.1 home redesign additions below --- */
 
 html,
-body {
+body,
+#root {
   height: 100vh;
   overflow: hidden;
 }
@@ -223,6 +272,8 @@ body {
   align-items: center;
   gap: var(--space-3);
   margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-accent-soft);
   flex-shrink: 0;
 }
 
@@ -245,6 +296,7 @@ body {
   gap: var(--space-2);
   cursor: pointer;
   color: var(--color-text-muted);
+  background: var(--color-accent-softer);
   transition:
     border-color 150ms ease,
     background-color 150ms ease,
@@ -252,12 +304,13 @@ body {
 }
 
 .dropzone:hover {
-  border-color: var(--color-text-muted);
+  border-color: var(--color-accent-hover);
+  background: var(--color-accent-soft);
 }
 
 .dropzone-active {
   border-color: var(--color-accent);
-  background: rgba(127, 29, 29, 0.08);
+  background: var(--color-accent-soft);
   color: var(--color-text);
 }
 
@@ -297,7 +350,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-accent-soft);
   padding-top: var(--space-3);
   margin-top: var(--space-3);
 }
