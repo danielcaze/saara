@@ -18,10 +18,10 @@ export function GroupCard({ group, onRename }: Props): React.JSX.Element {
           {expanded ? <CaretDown size={16} /> : <CaretRight size={16} />}
         </button>
         <input className="field" value={group.name} onChange={(e) => onRename(e.target.value)} />
-        <span className="tabular-nums">{group.files.length} arquivos</span>
+        <span className="tabular-nums">{group.files.length} files</span>
         <span className="tabular-nums">
           {group.isNoDateGroup
-            ? 'Sem data'
+            ? 'No date'
             : group.startDate?.slice(0, 10) === group.endDate?.slice(0, 10)
               ? group.startDate?.slice(0, 10)
               : `${group.startDate?.slice(0, 10)} – ${group.endDate?.slice(0, 10)}`}
@@ -36,7 +36,7 @@ export function GroupCard({ group, onRename }: Props): React.JSX.Element {
         <ul>
           {group.files.map((f) => (
             <li key={f.path}>
-              {f.fileName} {f.metadataError ? `(erro: ${f.metadataError})` : ''}
+              {f.fileName} {f.metadataError ? `(error: ${f.metadataError})` : ''}
             </li>
           ))}
         </ul>
