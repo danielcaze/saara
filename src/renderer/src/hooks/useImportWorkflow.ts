@@ -7,6 +7,8 @@ import type {
   PhotoGroup
 } from '../../../shared/types'
 
+const DEFAULT_GROUP_NAME = 'Untitled group'
+
 interface State {
   sourcePath: string | null
   destinationPath: string | null
@@ -160,7 +162,7 @@ export function useImportWorkflow(): ImportWorkflow {
       state.destinationPath,
       state.groups.map((g) => ({
         id: g.id,
-        name: g.name,
+        name: g.name.trim() || DEFAULT_GROUP_NAME,
         files: g.files.map((f) => ({ sourcePath: f.path, fileName: f.fileName }))
       }))
     )
