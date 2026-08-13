@@ -9,6 +9,11 @@ export interface ScannedFile {
 }
 
 export async function scanFiles(rootDir: string): Promise<ScannedFile[]> {
+  const rootStat = await fs.stat(rootDir).catch(() => null)
+  if (!rootStat || !rootStat.isDirectory()) {
+    throw new Error(`"${path.basename(rootDir)}" is not a folder. Please choose or drop a folder.`)
+  }
+
   const results: ScannedFile[] = []
 
   async function walk(dir: string): Promise<void> {

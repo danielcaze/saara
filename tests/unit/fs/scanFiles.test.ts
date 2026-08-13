@@ -56,4 +56,13 @@ describe('scanFiles', () => {
     expect(byName['b.CR2']).toBe('raw')
     expect(byName['c.mp4']).toBe('video')
   })
+
+  it('throws a clear error when rootDir is a file, not a folder', async () => {
+    await touch('not-a-folder.jpg')
+    await expect(scanFiles(path.join(tmpDir, 'not-a-folder.jpg'))).rejects.toThrow(/not a folder/)
+  })
+
+  it('throws a clear error when rootDir does not exist', async () => {
+    await expect(scanFiles(path.join(tmpDir, 'does-not-exist'))).rejects.toThrow(/not a folder/)
+  })
 })
