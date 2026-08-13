@@ -1,4 +1,5 @@
-import { useReducer, useCallback } from 'react'
+// src/renderer/src/hooks/useImportWorkflow.ts
+import { useCallback, useEffect, useReducer } from 'react'
 import type {
   AnalyzeProgress,
   CopyProgressEvent,
@@ -6,14 +7,12 @@ import type {
   PhotoGroup
 } from '../../../shared/types'
 
-type Stage = 'setup' | 'review'
-
 interface State {
-  stage: Stage
   sourcePath: string | null
   destinationPath: string | null
   thresholdHours: number
   analyzeProgress: AnalyzeProgress | null
+  analyzeError: string | null
   groups: PhotoGroup[]
   copying: boolean
   copyProgress: CopyProgressEvent | null
@@ -26,17 +25,18 @@ type Action =
   | { type: 'SET_THRESHOLD_HOURS'; hours: number }
   | { type: 'ANALYZE_PROGRESS'; progress: AnalyzeProgress }
   | { type: 'ANALYZE_DONE'; groups: PhotoGroup[] }
+  | { type: 'ANALYZE_ERROR'; message: string }
   | { type: 'SET_GROUPS'; groups: PhotoGroup[] }
   | { type: 'START_COPY' }
   | { type: 'COPY_PROGRESS'; progress: CopyProgressEvent }
   | { type: 'COPY_DONE'; summary: CopySummary }
 
 const initialState: State = {
-  stage: 'setup',
   sourcePath: null,
   destinationPath: null,
   thresholdHours: 24,
   analyzeProgress: null,
+  analyzeError: null,
   groups: [],
   copying: false,
   copyProgress: null,
@@ -46,15 +46,17 @@ const initialState: State = {
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'SET_SOURCE':
-      return { ...state, sourcePath: action.path }
+      return { ...state, sourcePath: action.path, groups: [], analyzeError: null, copySummary: null }
     case 'SET_DESTINATION':
       return { ...state, destinationPath: action.path }
     case 'SET_THRESHOLD_HOURS':
       return { ...state, thresholdHours: action.hours }
     case 'ANALYZE_PROGRESS':
-      return { ...state, analyzeProgress: action.progress }
+      return { ...state, analyzeProgress: action.progress, analyzeError: null }
     case 'ANALYZE_DONE':
-      return { ...state, stage: 'review', groups: action.groups, analyzeProgress: null }
+      return { ...state, groups: action.groups, analyzeProgress: null, analyzeError: null }
+    case 'ANALYZE_ERROR':
+      return { ...state, analyzeProgress: null, analyzeError: action.message, groups: [] }
     case 'SET_GROUPS':
       return { ...state, groups: action.groups }
     case 'START_COPY':
@@ -71,9 +73,9 @@ function reducer(state: State, action: Action): State {
 interface ImportWorkflow {
   state: State
   pickSource: () => Promise<void>
+  dropSource: (path: string) => Promise<void>
   pickDestination: () => Promise<void>
-  setThresholdHours: (hours: number) => void
-  analyze: () => Promise<void>
+  dropDestination: (path: string) => void
   recluster: (hours: number) => Promise<void>
   renameGroup: (groupId: string, name: string) => void
   startCopy: () => Promise<void>
@@ -82,32 +84,49 @@ interface ImportWorkflow {
 export function useImportWorkflow(): ImportWorkflow {
   const [state, dispatch] = useReducer(reducer, initialState)
 
+  useEffect(() => {
+    window.saaraAPI.getSettings().then(({ thresholdHours }) => {
+      dispatch({ type: 'SET_THRESHOLD_HOURS', hours: thresholdHours })
+    })
+  }, [])
+
+  const runAnalyze = useCallback(async (sourcePath: string, thresholdHours: number) => {
+    const unsubscribe = window.saaraAPI.onAnalyzeProgress((progress) => {
+      dispatch({ type: 'ANALYZE_PROGRESS', progress })
+    })
+    try {
+      const { groups } = await window.saaraAPI.analyze(sourcePath, thresholdHours * 3600_000)
+      dispatch({ type: 'ANALYZE_DONE', groups })
+    } catch (err) {
+      dispatch({ type: 'ANALYZE_ERROR', message: err instanceof Error ? err.message : String(err) })
+    } finally {
+      unsubscribe()
+    }
+  }, [])
+
   const pickSource = useCallback(async () => {
     const path = await window.saaraAPI.selectFolder('source')
-    if (path) dispatch({ type: 'SET_SOURCE', path })
-  }, [])
+    if (!path) return
+    dispatch({ type: 'SET_SOURCE', path })
+    void runAnalyze(path, state.thresholdHours)
+  }, [runAnalyze, state.thresholdHours])
+
+  const dropSource = useCallback(
+    async (path: string) => {
+      dispatch({ type: 'SET_SOURCE', path })
+      void runAnalyze(path, state.thresholdHours)
+    },
+    [runAnalyze, state.thresholdHours]
+  )
 
   const pickDestination = useCallback(async () => {
     const path = await window.saaraAPI.selectFolder('destination')
     if (path) dispatch({ type: 'SET_DESTINATION', path })
   }, [])
 
-  const setThresholdHours = useCallback((hours: number) => {
-    dispatch({ type: 'SET_THRESHOLD_HOURS', hours })
+  const dropDestination = useCallback((path: string) => {
+    dispatch({ type: 'SET_DESTINATION', path })
   }, [])
-
-  const analyze = useCallback(async () => {
-    if (!state.sourcePath) return
-    const unsubscribe = window.saaraAPI.onAnalyzeProgress((progress) => {
-      dispatch({ type: 'ANALYZE_PROGRESS', progress })
-    })
-    const { groups } = await window.saaraAPI.analyze(
-      state.sourcePath,
-      state.thresholdHours * 3600_000
-    )
-    unsubscribe()
-    dispatch({ type: 'ANALYZE_DONE', groups })
-  }, [state.sourcePath, state.thresholdHours])
 
   const recluster = useCallback(async (hours: number) => {
     dispatch({ type: 'SET_THRESHOLD_HOURS', hours })
@@ -146,9 +165,9 @@ export function useImportWorkflow(): ImportWorkflow {
   return {
     state,
     pickSource,
+    dropSource,
     pickDestination,
-    setThresholdHours,
-    analyze,
+    dropDestination,
     recluster,
     renameGroup,
     startCopy
