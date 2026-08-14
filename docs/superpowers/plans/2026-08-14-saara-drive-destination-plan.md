@@ -1179,6 +1179,8 @@ git commit -m "feat: add Drive upload orchestration (skip-duplicates, pause/retr
 
 Like Task 6, this has no dedicated unit test — it needs a real system browser and real Google consent screen. `parseDriveCallback` (Task 4, unit tested) is the part of this flow that actually has logic worth testing in isolation; this file just wires it to a real HTTP server and `OAuth2Client`. Verified via typecheck now and the manual smoke test in Task 16.
 
+> **Revised after code review**: the original draft had no timeout on the wait for the browser callback — if the user closed the tab or never completed consent, `connectDrive()` would hang forever with the local server still bound and no way to recover short of restarting the app. The email-fetch `fetch()` call also had no timeout, unlike every network call in `driveApi.ts` (Task 6, hardened for exactly this reason). Both fixed below with a shared `withTimeout` helper.
+
 - [ ] **Step 1: Implement**
 
 ```ts
@@ -1190,17 +1192,31 @@ import { parseDriveCallback } from './driveCallback'
 import type { DriveOAuthConfig } from './driveConfig'
 
 const SCOPE = 'https://www.googleapis.com/auth/drive.file'
+const CONNECT_TIMEOUT_MS = 5 * 60 * 1000 // time allowed to complete the browser consent flow
+const FETCH_TIMEOUT_MS = 30000
 
 export interface DriveConnectResult {
   refreshToken: string
   email: string
 }
 
+// Races `promise` against a timeout, and always clears the timer afterward
+// regardless of which one wins — otherwise a promise that settles well
+// before its timeout would still leave a dangling timer.
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId))
+}
+
 async function fetchConnectedEmail(oauth2Client: OAuth2Client): Promise<string> {
   const { token } = await oauth2Client.getAccessToken()
   if (!token) throw new Error('Failed to obtain a Google access token.')
   const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
   })
   if (!res.ok) throw new Error(`Failed to fetch the connected Google account (${res.status}).`)
   const data = (await res.json()) as { user?: { emailAddress?: string } }
@@ -1252,7 +1268,11 @@ export async function connectDrive(config: DriveOAuthConfig): Promise<DriveConne
 
   let code: string
   try {
-    code = await codePromise
+    code = await withTimeout(
+      codePromise,
+      CONNECT_TIMEOUT_MS,
+      'Google sign-in timed out. Try connecting again.'
+    )
   } finally {
     server.close()
   }
