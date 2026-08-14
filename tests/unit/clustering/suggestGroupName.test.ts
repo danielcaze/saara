@@ -22,7 +22,7 @@ describe('suggestGroupName', () => {
       endDate: new Date('2026-08-11T18:00:00Z'),
       isNoDateGroup: false,
     }
-    expect(suggestGroupName(group)).toBe('2026-08-09_a_2026-08-11')
+    expect(suggestGroupName(group)).toBe('2026-08-09_to_2026-08-11')
   })
 
   it('suggests "No date" for the no-date group', () => {

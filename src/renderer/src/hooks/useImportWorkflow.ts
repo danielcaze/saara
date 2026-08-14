@@ -14,7 +14,7 @@ function defaultGroupName(group: PhotoGroup): string {
   if (group.isNoDateGroup || !group.startDate || !group.endDate) return 'No date'
   const start = group.startDate.slice(0, 10)
   const end = group.endDate.slice(0, 10)
-  return start === end ? start : `${start}_a_${end}`
+  return start === end ? start : `${start}_to_${end}`
 }
 
 interface State {

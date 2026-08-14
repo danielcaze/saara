@@ -10,5 +10,5 @@ export function suggestGroupName(group: PhotoGroupResult): string {
   }
   const start = toDateStamp(group.startDate)
   const end = toDateStamp(group.endDate)
-  return start === end ? start : `${start}_a_${end}`
+  return start === end ? start : `${start}_to_${end}`
 }
