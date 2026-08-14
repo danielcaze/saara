@@ -770,6 +770,8 @@ git commit -m "feat: add Drive REST client (folders, listing, resumable upload)"
 This is where the actual "reuse folder, skip duplicates, pause-and-retry on network errors" logic lives, and it's fully unit-testable because it only depends on the `DriveApi` interface, not real network calls.
 
 > **Revised after code review**: the original draft was missing a folder-name collision guard — `copyEngine.ts` (the existing local-copy engine) already handles two *different* groups in one plan sanitizing to the same folder name via a `uniqueFolderPath`/`takenFolderNames` pair (suffixing the second one `" (2)"`, etc.), but the first draft of this file called `sanitizeFolderName` directly with no equivalent guard — meaning two same-named groups would silently merge into one Drive folder instead of getting separate ones. Fixed below by exporting and reusing `copyEngine.ts`'s existing helper rather than duplicating it. The review also found the test suite never exercised `onPause` actually firing during a single `uploadFile` call (the primary way Task 6's real `driveApi.ts` behaves now — it retries internally and calls `onPause` itself), and a misleading comment about why the outer retry loop still matters — both fixed below too.
+>
+> **Revised again after Task 10's review** (caught once IPC wiring made the whole flow easier to trace end-to-end): per-group folder setup (`findFolder`/`createFolder`/`listFileNames`) had no retry of its own — only the per-*file* upload loop retried on `DriveNetworkError`. A blip during setup, which happens once per group before any file even starts, aborted the entire plan instead of pausing, losing progress on every group after it — directly undercutting this checkpoint's "pause and retry through network blips" design goal. Fixed below with a `setupGroupFolder` helper that applies the same retry-with-backoff treatment to setup as the file loop already had, plus a new test.
 
 - [ ] **Step 1: Export `uniqueFolderPath` from `copyEngine.ts` for reuse**
 
@@ -1007,6 +1009,36 @@ describe('runDriveUploadPlan', () => {
     expect(folders.has('Trip (2)')).toBe(true)
     expect(folders.size).toBe(3) // root + "Trip" + "Trip (2)"
   })
+
+  it('retries group folder setup on a network error, then succeeds', async () => {
+    // Before the setupGroupFolder fix, a DriveNetworkError here propagated
+    // straight out of runDriveUploadPlan and aborted the whole plan — this
+    // test fails against that old behavior (the await below would reject)
+    // and only passes once setup retries like the per-file loop does.
+    const { api } = createFakeApi()
+    const root = await getOrCreateRootFolder(api)
+    let attempts = 0
+    const flakySetup: DriveApi = {
+      ...api,
+      async findFolder(parentId, name) {
+        attempts++
+        if (attempts < 3) throw new DriveNetworkError('simulated setup blip')
+        return api.findFolder(parentId, name)
+      }
+    }
+    const progress: CopyProgressEvent[] = []
+
+    const summary = await runDriveUploadPlan(
+      { rootFolderId: root.id, groups: oneGroup },
+      (e) => progress.push(e),
+      flakySetup,
+      { wait: instantWait }
+    )
+
+    expect(summary.copiedFiles).toBe(2)
+    expect(summary.errors).toEqual([])
+    expect(progress.some((e) => e.status === 'paused')).toBe(true)
+  })
 })
 ```
 
@@ -1043,6 +1075,32 @@ export async function getOrCreateRootFolder(api: DriveApi, name = 'Saara'): Prom
   return api.createFolder('root', name)
 }
 
+// Retries the whole find-or-create-folder + list-existing-files setup on a
+// network blip, same as the per-file upload loop below — without this, a
+// blip during setup (which happens once per group, before any file-level
+// retry logic even runs) would abort the entire plan instead of pausing,
+// losing progress on every group after it. Only DriveNetworkError retries;
+// any other error (e.g. a real permission problem) still propagates and
+// aborts, same as before this existed.
+async function setupGroupFolder(
+  api: DriveApi,
+  rootFolderId: string,
+  folderName: string,
+  onNetworkPause: () => Promise<void>
+): Promise<{ folder: DriveFolderRef; existingNames: Set<string> }> {
+  for (;;) {
+    try {
+      let folder = await api.findFolder(rootFolderId, folderName)
+      if (!folder) folder = await api.createFolder(rootFolderId, folderName)
+      const existingNames = await api.listFileNames(folder.id)
+      return { folder, existingNames }
+    } catch (err) {
+      if (!(err instanceof DriveNetworkError)) throw err
+      await onNetworkPause()
+    }
+  }
+}
+
 export async function runDriveUploadPlan(
   plan: DriveUploadPlan,
   onProgress: (e: CopyProgressEvent) => void,
@@ -1063,9 +1121,24 @@ export async function runDriveUploadPlan(
     // of that name, since a pre-existing one (from an earlier run) should be
     // reused for skip-duplicates, not treated as a collision.
     const folderName = uniqueFolderPath(sanitizeFolderName(group.name), takenFolderNames)
-    let folder = await api.findFolder(plan.rootFolderId, folderName)
-    if (!folder) folder = await api.createFolder(plan.rootFolderId, folderName)
-    const existingNames = await api.listFileNames(folder.id)
+    let setupAttempt = 0
+    const { folder, existingNames } = await setupGroupFolder(
+      api,
+      plan.rootFolderId,
+      folderName,
+      async () => {
+        setupAttempt++
+        onProgress({
+          groupId: group.id,
+          groupName: group.name,
+          fileName: group.files[0]?.fileName ?? '',
+          filesCopiedSoFar: doneSoFar,
+          totalFiles,
+          status: 'paused'
+        })
+        await wait(Math.min(5000 * 2 ** (setupAttempt - 1), maxBackoffMs))
+      }
+    )
 
     for (const file of group.files) {
       summary.totalFiles++
@@ -1161,7 +1234,7 @@ export async function runDriveUploadPlan(
 npx vitest run tests/unit/drive/driveUploadEngine.test.ts
 ```
 
-Expected: PASS, 9 tests. (This will fail to typecheck/import until Task 9 adds the `status` field to `CopyProgressEvent` — if running this task's tests before Task 9, expect a type error on the `status:` properties. Do Task 9 first if executing tasks out of order; as written, this plan does Task 9 after, so temporarily accept a type error here and re-verify after Task 9's Step 4.)
+Expected: PASS, 10 tests. (This will fail to typecheck/import until Task 9 adds the `status` field to `CopyProgressEvent` — if running this task's tests before Task 9, expect a type error on the `status:` properties. Do Task 9 first if executing tasks out of order; as written, this plan does Task 9 after, so temporarily accept a type error here and re-verify after Task 9's Step 4.)
 
 - [ ] **Step 6: Commit**
 
@@ -1401,7 +1474,7 @@ Expected: `driveUploadEngine.test.ts` (Task 7) now typechecks cleanly since `Cop
 npx vitest run tests/unit/drive/driveUploadEngine.test.ts
 ```
 
-Expected: PASS, 7 tests.
+Expected: PASS, 10 tests.
 
 - [ ] **Step 6: Run the full test suite (no regressions)**
 
