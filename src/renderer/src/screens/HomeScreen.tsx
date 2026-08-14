@@ -1,6 +1,13 @@
 // src/renderer/src/screens/HomeScreen.tsx
 import { AnimatePresence, motion } from 'motion/react'
-import { FolderOpen, FolderPlus, Gear, CheckCircle, WarningCircle } from '@phosphor-icons/react'
+import {
+  FolderOpen,
+  FolderPlus,
+  Gear,
+  CheckCircle,
+  WarningCircle,
+  GoogleDriveLogo
+} from '@phosphor-icons/react'
 import { Dropzone } from '../components/Dropzone'
 import { GroupCard } from '../components/GroupCard'
 import { ProgressBar } from '../components/ProgressBar'
@@ -24,6 +31,8 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     dropSource,
     pickDestination,
     dropDestination,
+    toggleDestinationType,
+    connectDrive,
     renameGroup,
     startCopy
   } = workflow
@@ -41,6 +50,32 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
             ? 'reviewing'
             : 'empty'
   const boxesDisabled = state.copying || !!state.analyzeProgress
+  const isDrive = state.destinationType === 'drive'
+
+  const destinationReady = isDrive ? state.driveStatus.connected : !!state.destinationPath
+
+  const driveBody = isDrive ? (
+    <>
+      <FolderPlus size={28} aria-hidden="true" />
+      <span className="dropzone-label">Destination</span>
+      {state.driveStatus.connected ? (
+        <span className="dropzone-path">{state.driveStatus.email}</span>
+      ) : (
+        <button
+          type="button"
+          className="field-button"
+          disabled={state.driveConnecting}
+          onClick={(e) => {
+            e.stopPropagation()
+            void connectDrive()
+          }}
+        >
+          {state.driveConnecting ? 'Connecting…' : 'Connect Google Drive'}
+        </button>
+      )}
+      {state.driveError && <span className="field-error">{state.driveError}</span>}
+    </>
+  ) : undefined
 
   return (
     <div className="home-screen">
@@ -76,6 +111,16 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           onPick={pickDestination}
           onDropPath={dropDestination}
           disabled={boxesDisabled}
+          overrideBody={driveBody}
+          cornerButton={{
+            icon: isDrive ? (
+              <FolderOpen size={16} aria-hidden="true" />
+            ) : (
+              <GoogleDriveLogo size={16} aria-hidden="true" />
+            ),
+            label: isDrive ? 'Switch to a local folder' : 'Switch to Google Drive',
+            onClick: toggleDestinationType
+          }}
         />
       </div>
 
@@ -144,12 +189,19 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
             >
-              <h1>Copying files…</h1>
+              <h1>{isDrive ? 'Uploading to Drive…' : 'Copying files…'}</h1>
               {state.copyProgress && (
                 <>
-                  <p>
-                    {state.copyProgress.groupName}: {state.copyProgress.fileName}
-                  </p>
+                  {state.copyProgress.status === 'paused' ? (
+                    <p className="field-error">
+                      <WarningCircle size={16} aria-hidden="true" /> Paused — waiting for
+                      connection…
+                    </p>
+                  ) : (
+                    <p>
+                      {state.copyProgress.groupName}: {state.copyProgress.fileName}
+                    </p>
+                  )}
                   <ProgressBar
                     current={state.copyProgress.filesCopiedSoFar}
                     total={state.copyProgress.totalFiles}
@@ -168,10 +220,14 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
               transition={{ duration: 0.15 }}
             >
               <h1>
-                <CheckCircle size={22} aria-hidden="true" /> Copy complete
+                <CheckCircle size={22} aria-hidden="true" />{' '}
+                {isDrive ? 'Upload complete' : 'Copy complete'}
               </h1>
               <p className="tabular-nums">
-                {state.copySummary.copiedFiles}/{state.copySummary.totalFiles} files copied
+                {state.copySummary.copiedFiles}/{state.copySummary.totalFiles} files{' '}
+                {isDrive ? 'uploaded' : 'copied'}
+                {state.copySummary.skippedFiles > 0 &&
+                  ` (${state.copySummary.skippedFiles} already there, skipped)`}
               </p>
               {state.copySummary.conflicts.length > 0 && (
                 <p>
@@ -183,18 +239,24 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
               {state.copySummary.errors.length > 0 && (
                 <p>
                   <WarningCircle size={16} aria-hidden="true" /> {state.copySummary.errors.length}{' '}
-                  files failed to copy
+                  files failed to {isDrive ? 'upload' : 'copy'}
                 </p>
               )}
-              <button
-                className="primary"
-                disabled={!state.destinationPath}
-                onClick={() =>
-                  state.destinationPath && window.saaraAPI.openPath(state.destinationPath)
-                }
-              >
-                <FolderOpen size={18} aria-hidden="true" /> Open destination folder
-              </button>
+              {isDrive ? (
+                <button className="primary" onClick={() => window.saaraAPI.openDriveRoot()}>
+                  <GoogleDriveLogo size={18} aria-hidden="true" /> View in Drive
+                </button>
+              ) : (
+                <button
+                  className="primary"
+                  disabled={!state.destinationPath}
+                  onClick={() =>
+                    state.destinationPath && window.saaraAPI.openPath(state.destinationPath)
+                  }
+                >
+                  <FolderOpen size={18} aria-hidden="true" /> Open destination folder
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -205,11 +267,16 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           <span className="tabular-nums field-value">
             {state.groups.length} groups, {totalFiles} files
           </span>
-          {!state.destinationPath && (
-            <span className="field-error">Select a destination folder to continue</span>
+          {!destinationReady && (
+            <span className="field-error">
+              {isDrive
+                ? 'Connect Google Drive to continue'
+                : 'Select a destination folder to continue'}
+            </span>
           )}
-          <button className="primary" disabled={!state.destinationPath} onClick={startCopy}>
-            Confirm &amp; Copy
+          {state.copyError && <span className="field-error">{state.copyError}</span>}
+          <button className="primary" disabled={!destinationReady} onClick={startCopy}>
+            {isDrive ? 'Confirm & Upload' : 'Confirm & Copy'}
           </button>
         </div>
       )}
