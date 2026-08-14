@@ -7,6 +7,15 @@ import type {
   PhotoGroup
 } from '../../../shared/types'
 
+// Electron's ipcRenderer.invoke wraps main-process errors as
+// `Error invoking remote method '<channel>': Error: <original message>` —
+// strip that wrapper so the UI shows the original, user-facing message.
+function friendlyIpcError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err)
+  const match = raw.match(/^Error invoking remote method '[^']*':\s*(?:Error:\s*)?(.*)$/s)
+  return match ? match[1] : raw
+}
+
 // Mirrors src/shared/clustering/suggestGroupName.ts's date-stamp convention,
 // so a blanked-out rename falls back to the same name auto-generation would
 // have produced, not a generic placeholder.
@@ -114,7 +123,7 @@ export function useImportWorkflow(): ImportWorkflow {
       const { groups } = await window.saaraAPI.analyze(sourcePath, thresholdHours * 3600_000)
       dispatch({ type: 'ANALYZE_DONE', groups })
     } catch (err) {
-      dispatch({ type: 'ANALYZE_ERROR', message: err instanceof Error ? err.message : String(err) })
+      dispatch({ type: 'ANALYZE_ERROR', message: friendlyIpcError(err) })
     } finally {
       unsubscribe()
     }

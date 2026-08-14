@@ -10,23 +10,36 @@ interface Props {
 }
 
 export function SettingsScreen({ workflow, onBack }: Props): React.JSX.Element {
-  const [thresholdHours, setThresholdHours] = useState(workflow.state.thresholdHours)
+  // Kept as the raw string the user is typing (not a number) so a controlled
+  // <input type="number"> doesn't fight the browser over leading zeros/empty
+  // values while mid-edit (e.g. deleting down to "" then typing "1" would
+  // otherwise round-trip through 0 and render "01").
+  const [rawValue, setRawValue] = useState(String(workflow.state.thresholdHours))
   const [error, setError] = useState<string | null>(null)
 
-  function handleChange(value: number): void {
-    setThresholdHours(value)
-    const result = validateThresholdHours(value)
+  function handleChange(value: string): void {
+    setRawValue(value)
+    const parsed = Number(value)
+    if (value.trim() === '' || Number.isNaN(parsed)) {
+      setError('Enter a number.')
+      return
+    }
+    const result = validateThresholdHours(parsed)
     setError(result.ok ? null : result.message)
   }
 
   async function handleSave(): Promise<void> {
-    const result = validateThresholdHours(thresholdHours)
+    const parsed = Number(rawValue)
+    const result =
+      rawValue.trim() === '' || Number.isNaN(parsed)
+        ? { ok: false as const, message: 'Enter a number.' }
+        : validateThresholdHours(parsed)
     if (!result.ok) {
       setError(result.message)
       return
     }
-    await window.saaraAPI.setSettings({ thresholdHours })
-    await workflow.recluster(thresholdHours)
+    await window.saaraAPI.setSettings({ thresholdHours: parsed })
+    await workflow.recluster(parsed)
     onBack()
   }
 
@@ -46,8 +59,8 @@ export function SettingsScreen({ workflow, onBack }: Props): React.JSX.Element {
           type="number"
           min={1}
           className="field"
-          value={thresholdHours}
-          onChange={(e) => handleChange(Number(e.target.value))}
+          value={rawValue}
+          onChange={(e) => handleChange(e.target.value)}
         />
         {error && <p className="field-error">{error}</p>}
       </div>

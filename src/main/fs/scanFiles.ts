@@ -8,11 +8,15 @@ export interface ScannedFile {
   mediaType: MediaType
 }
 
-export async function scanFiles(rootDir: string): Promise<ScannedFile[]> {
+export async function assertIsDirectory(rootDir: string): Promise<void> {
   const rootStat = await fs.stat(rootDir).catch(() => null)
   if (!rootStat || !rootStat.isDirectory()) {
     throw new Error(`"${path.basename(rootDir)}" is not a folder. Please choose or drop a folder.`)
   }
+}
+
+export async function scanFiles(rootDir: string): Promise<ScannedFile[]> {
+  await assertIsDirectory(rootDir)
 
   const results: ScannedFile[] = []
 

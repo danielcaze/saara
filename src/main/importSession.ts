@@ -1,5 +1,5 @@
 // src/main/importSession.ts
-import { scanFiles } from './fs/scanFiles'
+import { scanFiles, assertIsDirectory } from './fs/scanFiles'
 import { extractMetadataBatch, type ExtractedMetadata } from './metadata/extractMetadata'
 import { clusterByGap, type TimestampedFile } from '../shared/clustering/clusterByGap'
 import { suggestGroupName } from '../shared/clustering/suggestGroupName'
@@ -44,6 +44,8 @@ export async function analyzeSource(
   thresholdMs: number,
   onProgress: (p: AnalyzeProgress) => void,
 ): Promise<PhotoGroup[]> {
+  await assertIsDirectory(sourcePath)
+
   onProgress({ phase: 'scanning', current: 0, total: 0 })
   const scanned = await scanFiles(sourcePath)
 
