@@ -9,4 +9,10 @@ export const IPC = {
   OPEN_PATH: 'shell:openPath',
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
+  DRIVE_STATUS: 'drive:status',
+  DRIVE_CONNECT: 'drive:connect',
+  DRIVE_DISCONNECT: 'drive:disconnect',
+  DRIVE_UPLOAD_START: 'drive:upload:start',
+  DRIVE_UPLOAD_PROGRESS: 'drive:upload:progress',
+  DRIVE_OPEN_ROOT: 'drive:openRoot'
 } as const

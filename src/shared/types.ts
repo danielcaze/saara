@@ -36,6 +36,12 @@ export interface CopyProgressEvent {
   fileName: string
   filesCopiedSoFar: number
   totalFiles: number
+  status?: 'uploading' | 'paused' | 'done'
+}
+
+export interface DriveStatus {
+  connected: boolean
+  email: string | null
 }
 
 export interface CopySummary {
