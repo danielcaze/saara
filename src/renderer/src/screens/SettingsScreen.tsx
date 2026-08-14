@@ -17,7 +17,10 @@ export function SettingsScreen({ workflow, onBack }: Props): React.JSX.Element {
   const [rawValue, setRawValue] = useState(String(workflow.state.thresholdHours))
   const [error, setError] = useState<string | null>(null)
 
-  function handleChange(value: string): void {
+  function handleChange(rawInput: string): void {
+    // `maxLength` isn't enforced by Chromium on type="number" inputs, so cap
+    // it here (max valid value is 720, i.e. 3 digits).
+    const value = rawInput.slice(0, 3)
     setRawValue(value)
     const parsed = Number(value)
     if (value.trim() === '' || Number.isNaN(parsed)) {
@@ -54,14 +57,22 @@ export function SettingsScreen({ workflow, onBack }: Props): React.JSX.Element {
 
       <div className="field-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
         <label htmlFor="threshold-settings">Group gap threshold (hours)</label>
-        <input
-          id="threshold-settings"
-          type="number"
-          min={1}
-          className="field"
-          value={rawValue}
-          onChange={(e) => handleChange(e.target.value)}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          <input
+            id="threshold-settings"
+            type="number"
+            min={1}
+            className="field"
+            style={{
+              width: `calc(${Math.min(Math.max(rawValue.length, 2), 3)}ch + var(--space-4))`
+            }}
+            value={rawValue}
+            onChange={(e) => handleChange(e.target.value)}
+          />
+          <span className="field-value" aria-hidden="true">
+            h
+          </span>
+        </div>
         {error && <p className="field-error">{error}</p>}
       </div>
 

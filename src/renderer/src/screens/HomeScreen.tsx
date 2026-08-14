@@ -8,7 +8,7 @@ import type { useImportWorkflow } from '../hooks/useImportWorkflow'
 
 const PHASE_LABELS: Record<string, string> = {
   scanning: 'Scanning files',
-  'reading-metadata': 'Reading metadata',
+  'reading-metadata': 'Analyzing files',
   clustering: 'Grouping'
 }
 
