@@ -1,5 +1,12 @@
+// src/renderer/src/components/Dropzone.tsx
 import { useState } from 'react'
 import type { ReactNode, DragEvent, KeyboardEvent } from 'react'
+
+interface CornerButtonProps {
+  icon: ReactNode
+  label: string
+  onClick: () => void
+}
 
 interface Props {
   label: string
@@ -9,6 +16,8 @@ interface Props {
   onPick: () => void
   onDropPath: (path: string) => void
   disabled?: boolean
+  cornerButton?: CornerButtonProps
+  overrideBody?: ReactNode
 }
 
 export function Dropzone({
@@ -18,7 +27,9 @@ export function Dropzone({
   path,
   onPick,
   onDropPath,
-  disabled
+  disabled,
+  cornerButton,
+  overrideBody
 }: Props): React.JSX.Element {
   const [isDragOver, setIsDragOver] = useState(false)
 
@@ -34,7 +45,7 @@ export function Dropzone({
   function handleDrop(e: DragEvent<HTMLDivElement>): void {
     e.preventDefault()
     setIsDragOver(false)
-    if (disabled) return
+    if (disabled || overrideBody) return
     const file = e.dataTransfer.files[0]
     if (!file) return
     const droppedPath = window.saaraAPI.getPathForFile(file)
@@ -59,18 +70,35 @@ export function Dropzone({
       tabIndex={disabled ? -1 : 0}
       aria-disabled={disabled ? 'true' : undefined}
       aria-label={accessibleLabel}
-      onClick={disabled ? undefined : onPick}
+      onClick={disabled || overrideBody ? undefined : onPick}
       onKeyDown={handleKeyDown}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {icon}
-      <span className="dropzone-label">{label}</span>
-      {path ? (
-        <span className="dropzone-path">{path}</span>
-      ) : (
-        <span className="dropzone-hint">{hint}</span>
+      {cornerButton && (
+        <button
+          type="button"
+          className="dropzone-corner-button"
+          aria-label={cornerButton.label}
+          onClick={(e) => {
+            e.stopPropagation()
+            cornerButton.onClick()
+          }}
+        >
+          {cornerButton.icon}
+        </button>
+      )}
+      {overrideBody ?? (
+        <>
+          {icon}
+          <span className="dropzone-label">{label}</span>
+          {path ? (
+            <span className="dropzone-path">{path}</span>
+          ) : (
+            <span className="dropzone-hint">{hint}</span>
+          )}
+        </>
       )}
     </div>
   )
