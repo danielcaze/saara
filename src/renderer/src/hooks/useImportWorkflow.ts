@@ -4,6 +4,7 @@ import type {
   AnalyzeProgress,
   CopyProgressEvent,
   CopySummary,
+  DriveStatus,
   PhotoGroup
 } from '../../../shared/types'
 
@@ -26,9 +27,15 @@ function defaultGroupName(group: PhotoGroup): string {
   return start === end ? start : `${start}_to_${end}`
 }
 
+type DestinationType = 'local' | 'drive'
+
 interface State {
   sourcePath: string | null
   destinationPath: string | null
+  destinationType: DestinationType
+  driveStatus: DriveStatus
+  driveConnecting: boolean
+  driveError: string | null
   thresholdHours: number
   analyzeProgress: AnalyzeProgress | null
   analyzeError: string | null
@@ -36,11 +43,18 @@ interface State {
   copying: boolean
   copyProgress: CopyProgressEvent | null
   copySummary: CopySummary | null
+  copyError: string | null
 }
 
 type Action =
   | { type: 'SET_SOURCE'; path: string }
   | { type: 'SET_DESTINATION'; path: string }
+  | { type: 'TOGGLE_DESTINATION_TYPE' }
+  | { type: 'DRIVE_STATUS_LOADED'; status: DriveStatus }
+  | { type: 'DRIVE_CONNECTING' }
+  | { type: 'DRIVE_CONNECTED'; status: DriveStatus }
+  | { type: 'DRIVE_CONNECT_ERROR'; message: string }
+  | { type: 'DRIVE_DISCONNECTED' }
   | { type: 'SET_THRESHOLD_HOURS'; hours: number }
   | { type: 'ANALYZE_PROGRESS'; progress: AnalyzeProgress }
   | { type: 'ANALYZE_DONE'; groups: PhotoGroup[] }
@@ -49,17 +63,23 @@ type Action =
   | { type: 'START_COPY' }
   | { type: 'COPY_PROGRESS'; progress: CopyProgressEvent }
   | { type: 'COPY_DONE'; summary: CopySummary }
+  | { type: 'COPY_ERROR'; message: string }
 
 const initialState: State = {
   sourcePath: null,
   destinationPath: null,
+  destinationType: 'local',
+  driveStatus: { connected: false, email: null },
+  driveConnecting: false,
+  driveError: null,
   thresholdHours: 24,
   analyzeProgress: null,
   analyzeError: null,
   groups: [],
   copying: false,
   copyProgress: null,
-  copySummary: null
+  copySummary: null,
+  copyError: null
 }
 
 function reducer(state: State, action: Action): State {
@@ -74,6 +94,23 @@ function reducer(state: State, action: Action): State {
       }
     case 'SET_DESTINATION':
       return { ...state, destinationPath: action.path, copySummary: null }
+    case 'TOGGLE_DESTINATION_TYPE':
+      return {
+        ...state,
+        destinationType: state.destinationType === 'local' ? 'drive' : 'local',
+        copySummary: null,
+        driveError: null
+      }
+    case 'DRIVE_STATUS_LOADED':
+      return { ...state, driveStatus: action.status }
+    case 'DRIVE_CONNECTING':
+      return { ...state, driveConnecting: true, driveError: null }
+    case 'DRIVE_CONNECTED':
+      return { ...state, driveConnecting: false, driveStatus: action.status, driveError: null }
+    case 'DRIVE_CONNECT_ERROR':
+      return { ...state, driveConnecting: false, driveError: action.message }
+    case 'DRIVE_DISCONNECTED':
+      return { ...state, driveStatus: { connected: false, email: null } }
     case 'SET_THRESHOLD_HOURS':
       return { ...state, thresholdHours: action.hours }
     case 'ANALYZE_PROGRESS':
@@ -85,11 +122,13 @@ function reducer(state: State, action: Action): State {
     case 'SET_GROUPS':
       return { ...state, groups: action.groups }
     case 'START_COPY':
-      return { ...state, copying: true, copyProgress: null, copySummary: null }
+      return { ...state, copying: true, copyProgress: null, copySummary: null, copyError: null }
     case 'COPY_PROGRESS':
       return { ...state, copyProgress: action.progress }
     case 'COPY_DONE':
       return { ...state, copying: false, copySummary: action.summary }
+    case 'COPY_ERROR':
+      return { ...state, copying: false, copyError: action.message }
     default:
       return state
   }
@@ -101,6 +140,9 @@ interface ImportWorkflow {
   dropSource: (path: string) => Promise<void>
   pickDestination: () => Promise<void>
   dropDestination: (path: string) => void
+  toggleDestinationType: () => void
+  connectDrive: () => Promise<void>
+  disconnectDrive: () => Promise<void>
   recluster: (hours: number) => Promise<void>
   renameGroup: (groupId: string, name: string) => void
   startCopy: () => Promise<void>
@@ -112,6 +154,9 @@ export function useImportWorkflow(): ImportWorkflow {
   useEffect(() => {
     window.saaraAPI.getSettings().then(({ thresholdHours }) => {
       dispatch({ type: 'SET_THRESHOLD_HOURS', hours: thresholdHours })
+    })
+    window.saaraAPI.driveStatus().then((status) => {
+      dispatch({ type: 'DRIVE_STATUS_LOADED', status })
     })
   }, [])
 
@@ -153,6 +198,25 @@ export function useImportWorkflow(): ImportWorkflow {
     dispatch({ type: 'SET_DESTINATION', path })
   }, [])
 
+  const toggleDestinationType = useCallback(() => {
+    dispatch({ type: 'TOGGLE_DESTINATION_TYPE' })
+  }, [])
+
+  const connectDriveAccount = useCallback(async () => {
+    dispatch({ type: 'DRIVE_CONNECTING' })
+    try {
+      const status = await window.saaraAPI.driveConnect()
+      dispatch({ type: 'DRIVE_CONNECTED', status })
+    } catch (err) {
+      dispatch({ type: 'DRIVE_CONNECT_ERROR', message: friendlyIpcError(err) })
+    }
+  }, [])
+
+  const disconnectDrive = useCallback(async () => {
+    await window.saaraAPI.driveDisconnect()
+    dispatch({ type: 'DRIVE_DISCONNECTED' })
+  }, [])
+
   const recluster = useCallback(async (hours: number) => {
     dispatch({ type: 'SET_THRESHOLD_HOURS', hours })
     const { groups } = await window.saaraAPI.recluster(hours * 3600_000)
@@ -170,22 +234,38 @@ export function useImportWorkflow(): ImportWorkflow {
   )
 
   const startCopy = useCallback(async () => {
-    if (!state.destinationPath) return
+    const isDrive = state.destinationType === 'drive'
+    if (isDrive ? !state.driveStatus.connected : !state.destinationPath) return
+
     dispatch({ type: 'START_COPY' })
-    const unsubscribe = window.saaraAPI.onCopyProgress((progress) => {
-      dispatch({ type: 'COPY_PROGRESS', progress })
-    })
-    const summary = await window.saaraAPI.copyStart(
-      state.destinationPath,
-      state.groups.map((g) => ({
-        id: g.id,
-        name: g.name.trim() || defaultGroupName(g),
-        files: g.files.map((f) => ({ sourcePath: f.path, fileName: f.fileName }))
-      }))
-    )
-    unsubscribe()
-    dispatch({ type: 'COPY_DONE', summary })
-  }, [state.destinationPath, state.groups])
+    const unsubscribe = isDrive
+      ? window.saaraAPI.onDriveUploadProgress((progress) =>
+          dispatch({ type: 'COPY_PROGRESS', progress })
+        )
+      : window.saaraAPI.onCopyProgress((progress) => dispatch({ type: 'COPY_PROGRESS', progress }))
+
+    const groups = state.groups.map((g) => ({
+      id: g.id,
+      name: g.name.trim() || defaultGroupName(g),
+      files: g.files.map((f) => ({ sourcePath: f.path, fileName: f.fileName }))
+    }))
+
+    try {
+      const summary = isDrive
+        ? await window.saaraAPI.driveUploadStart(groups)
+        : await window.saaraAPI.copyStart(state.destinationPath as string, groups)
+      dispatch({ type: 'COPY_DONE', summary })
+    } catch (err) {
+      // Covers upfront failures with no per-file granularity to attach an error
+      // to — Drive not connected, OAuth not configured, no network at all
+      // before the first request even goes out. Without this, the UI would
+      // stay stuck on "Uploading..." forever, since nothing else clears
+      // `copying`.
+      dispatch({ type: 'COPY_ERROR', message: friendlyIpcError(err) })
+    } finally {
+      unsubscribe()
+    }
+  }, [state.destinationType, state.destinationPath, state.driveStatus.connected, state.groups])
 
   return {
     state,
@@ -193,6 +273,9 @@ export function useImportWorkflow(): ImportWorkflow {
     dropSource,
     pickDestination,
     dropDestination,
+    toggleDestinationType,
+    connectDrive: connectDriveAccount,
+    disconnectDrive,
     recluster,
     renameGroup,
     startCopy
