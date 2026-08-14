@@ -2100,6 +2100,10 @@ git commit -m "feat: add destinationType/Drive connection state, branch startCop
 **Files:**
 - Modify: `src/renderer/src/components/Dropzone.tsx`
 
+> **Revised after code review**: the first draft's `handleKeyDown` only checked `disabled`, not `overrideBody` — so tabbing to the box and pressing Enter/Space still fired the stale `onPick()` even when `overrideBody` had replaced the clickable folder-picker body with something else (e.g. Task 14's Drive connect prompt), even though the pointer path (`onClick`/`handleDrop`) already had that guard. It also didn't check whether the keydown originated from the new nested corner `<button>` (native `keydown` bubbles up to the div regardless of the click-level `stopPropagation()`, which only affects the `click` event) — so keyboard-activating the corner button also incorrectly ran the parent's `onPick`. Both fixed below by adding the same `overrideBody` guard `onClick`/`handleDrop` already had, plus an `e.target !== e.currentTarget` check to ignore keydowns bubbling up from a focused descendant. `handleDragOver` also gained the same `overrideBody` guard so the hover-highlight styling doesn't misleadingly activate when dropping is disabled by `overrideBody`.
+>
+> Nesting a real `<button>` inside this div's `role="button"` is a known ARIA anti-pattern (axe: "nested-interactive") — mainstream screen readers still let a user Tab into and independently activate the nested button (verified: native `<button>` elements are focusable regardless of an ancestor's `tabIndex`, and DOM tab order follows document order regardless of nesting), so it's not an unreachable-content failure, but it is semantically ambiguous and will be flagged by automated a11y audits. Restructuring this into sibling elements under a plain wrapper (rather than nesting) would be the fully-correct fix, but it cascades into Task 15's not-yet-written CSS (which positions the corner button relative to `.dropzone`). Accepted as a documented, conscious tradeoff for now rather than an accidental regression — revisit if an audit flags it.
+
 - [ ] **Step 1: Replace the file's full contents**
 
 ```tsx
@@ -2140,7 +2144,7 @@ export function Dropzone({
 
   function handleDragOver(e: DragEvent<HTMLDivElement>): void {
     e.preventDefault()
-    if (!disabled) setIsDragOver(true)
+    if (!disabled && !overrideBody) setIsDragOver(true)
   }
 
   function handleDragLeave(): void {
@@ -2158,7 +2162,13 @@ export function Dropzone({
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLDivElement>): void {
-    if (disabled) return
+    // The `overrideBody` check mirrors onClick/handleDrop's guard above.
+    // The target check ignores keydowns bubbling up from a focused
+    // descendant (the corner button below) — without it, Enter/Space on
+    // the corner button would *also* trigger this div's onPick, since
+    // native keydown bubbling isn't affected by the corner button's own
+    // click-level stopPropagation().
+    if (disabled || overrideBody || e.target !== e.currentTarget) return
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       onPick()
