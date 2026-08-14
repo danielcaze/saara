@@ -205,6 +205,9 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           <span className="tabular-nums field-value">
             {state.groups.length} groups, {totalFiles} files
           </span>
+          {!state.destinationPath && (
+            <span className="field-error">Select a destination folder to continue</span>
+          )}
           <button className="primary" disabled={!state.destinationPath} onClick={startCopy}>
             Confirm &amp; Copy
           </button>

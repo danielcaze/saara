@@ -43,7 +43,10 @@
 }
 
 ::selection {
-  background: var(--color-accent-soft);
+  /* --color-accent-soft (14% alpha) was too faint to read against the
+     near-black background — bumped opacity so the highlight is actually
+     visible while keeping --color-text legible on top of it. */
+  background: rgba(153, 27, 27, 0.55);
   color: var(--color-text);
 }
 

@@ -7,7 +7,15 @@ import type {
   PhotoGroup
 } from '../../../shared/types'
 
-const DEFAULT_GROUP_NAME = 'Untitled group'
+// Mirrors src/shared/clustering/suggestGroupName.ts's date-stamp convention,
+// so a blanked-out rename falls back to the same name auto-generation would
+// have produced, not a generic placeholder.
+function defaultGroupName(group: PhotoGroup): string {
+  if (group.isNoDateGroup || !group.startDate || !group.endDate) return 'No date'
+  const start = group.startDate.slice(0, 10)
+  const end = group.endDate.slice(0, 10)
+  return start === end ? start : `${start}_a_${end}`
+}
 
 interface State {
   sourcePath: string | null
@@ -162,7 +170,7 @@ export function useImportWorkflow(): ImportWorkflow {
       state.destinationPath,
       state.groups.map((g) => ({
         id: g.id,
-        name: g.name.trim() || DEFAULT_GROUP_NAME,
+        name: g.name.trim() || defaultGroupName(g),
         files: g.files.map((f) => ({ sourcePath: f.path, fileName: f.fileName }))
       }))
     )
