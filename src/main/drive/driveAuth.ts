@@ -5,17 +5,31 @@ import { parseDriveCallback } from './driveCallback'
 import type { DriveOAuthConfig } from './driveConfig'
 
 const SCOPE = 'https://www.googleapis.com/auth/drive.file'
+const CONNECT_TIMEOUT_MS = 5 * 60 * 1000 // time allowed to complete the browser consent flow
+const FETCH_TIMEOUT_MS = 30000
 
 export interface DriveConnectResult {
   refreshToken: string
   email: string
 }
 
+// Races `promise` against a timeout, and always clears the timer afterward
+// regardless of which one wins — otherwise a promise that settles well
+// before its timeout would still leave a dangling timer.
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId))
+}
+
 async function fetchConnectedEmail(oauth2Client: OAuth2Client): Promise<string> {
   const { token } = await oauth2Client.getAccessToken()
   if (!token) throw new Error('Failed to obtain a Google access token.')
   const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
   })
   if (!res.ok) throw new Error(`Failed to fetch the connected Google account (${res.status}).`)
   const data = (await res.json()) as { user?: { emailAddress?: string } }
@@ -67,7 +81,11 @@ export async function connectDrive(config: DriveOAuthConfig): Promise<DriveConne
 
   let code: string
   try {
-    code = await codePromise
+    code = await withTimeout(
+      codePromise,
+      CONNECT_TIMEOUT_MS,
+      'Google sign-in timed out. Try connecting again.'
+    )
   } finally {
     server.close()
   }
