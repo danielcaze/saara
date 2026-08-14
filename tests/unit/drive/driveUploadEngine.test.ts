@@ -225,4 +225,34 @@ describe('runDriveUploadPlan', () => {
     expect(folders.has('Trip (2)')).toBe(true)
     expect(folders.size).toBe(3) // root + "Trip" + "Trip (2)"
   })
+
+  it('retries group folder setup on a network error, then succeeds', async () => {
+    // Before the setupGroupFolder fix, a DriveNetworkError here propagated
+    // straight out of runDriveUploadPlan and aborted the whole plan — this
+    // test fails against that old behavior (the await below would reject)
+    // and only passes once setup retries like the per-file loop does.
+    const { api } = createFakeApi()
+    const root = await getOrCreateRootFolder(api)
+    let attempts = 0
+    const flakySetup: DriveApi = {
+      ...api,
+      async findFolder(parentId, name) {
+        attempts++
+        if (attempts < 3) throw new DriveNetworkError('simulated setup blip')
+        return api.findFolder(parentId, name)
+      }
+    }
+    const progress: CopyProgressEvent[] = []
+
+    const summary = await runDriveUploadPlan(
+      { rootFolderId: root.id, groups: oneGroup },
+      (e) => progress.push(e),
+      flakySetup,
+      { wait: instantWait }
+    )
+
+    expect(summary.copiedFiles).toBe(2)
+    expect(summary.errors).toEqual([])
+    expect(progress.some((e) => e.status === 'paused')).toBe(true)
+  })
 })

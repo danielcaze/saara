@@ -22,6 +22,32 @@ export async function getOrCreateRootFolder(
   return api.createFolder('root', name)
 }
 
+// Retries the whole find-or-create-folder + list-existing-files setup on a
+// network blip, same as the per-file upload loop below — without this, a
+// blip during setup (which happens once per group, before any file-level
+// retry logic even runs) would abort the entire plan instead of pausing,
+// losing progress on every group after it. Only DriveNetworkError retries;
+// any other error (e.g. a real permission problem) still propagates and
+// aborts, same as before this existed.
+async function setupGroupFolder(
+  api: DriveApi,
+  rootFolderId: string,
+  folderName: string,
+  onNetworkPause: () => Promise<void>
+): Promise<{ folder: DriveFolderRef; existingNames: Set<string> }> {
+  for (;;) {
+    try {
+      let folder = await api.findFolder(rootFolderId, folderName)
+      if (!folder) folder = await api.createFolder(rootFolderId, folderName)
+      const existingNames = await api.listFileNames(folder.id)
+      return { folder, existingNames }
+    } catch (err) {
+      if (!(err instanceof DriveNetworkError)) throw err
+      await onNetworkPause()
+    }
+  }
+}
+
 export async function runDriveUploadPlan(
   plan: DriveUploadPlan,
   onProgress: (e: CopyProgressEvent) => void,
@@ -49,9 +75,24 @@ export async function runDriveUploadPlan(
     // of that name, since a pre-existing one (from an earlier run) should be
     // reused for skip-duplicates, not treated as a collision.
     const folderName = uniqueFolderPath(sanitizeFolderName(group.name), takenFolderNames)
-    let folder = await api.findFolder(plan.rootFolderId, folderName)
-    if (!folder) folder = await api.createFolder(plan.rootFolderId, folderName)
-    const existingNames = await api.listFileNames(folder.id)
+    let setupAttempt = 0
+    const { folder, existingNames } = await setupGroupFolder(
+      api,
+      plan.rootFolderId,
+      folderName,
+      async () => {
+        setupAttempt++
+        onProgress({
+          groupId: group.id,
+          groupName: group.name,
+          fileName: group.files[0]?.fileName ?? '',
+          filesCopiedSoFar: doneSoFar,
+          totalFiles,
+          status: 'paused'
+        })
+        await wait(Math.min(5000 * 2 ** (setupAttempt - 1), maxBackoffMs))
+      }
+    )
 
     for (const file of group.files) {
       summary.totalFiles++
