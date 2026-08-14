@@ -6,6 +6,7 @@ import type {
   CopyPlanGroup,
   CopyProgressEvent,
   CopySummary,
+  DriveStatus,
   MediaType,
   PhotoGroup
 } from '../shared/types'
@@ -46,9 +47,27 @@ const saaraAPI = {
 
   getSettings: (): Promise<Settings> => ipcRenderer.invoke(IPC.SETTINGS_GET),
 
-  setSettings: (settings: Settings): Promise<void> => ipcRenderer.invoke(IPC.SETTINGS_SET, settings),
+  setSettings: (settings: Settings): Promise<void> =>
+    ipcRenderer.invoke(IPC.SETTINGS_SET, settings),
 
-  getPathForFile: (file: File): string => webUtils.getPathForFile(file)
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
+
+  driveStatus: (): Promise<DriveStatus> => ipcRenderer.invoke(IPC.DRIVE_STATUS),
+
+  driveConnect: (): Promise<DriveStatus> => ipcRenderer.invoke(IPC.DRIVE_CONNECT),
+
+  driveDisconnect: (): Promise<void> => ipcRenderer.invoke(IPC.DRIVE_DISCONNECT),
+
+  driveUploadStart: (groups: CopyPlanGroup[]): Promise<CopySummary> =>
+    ipcRenderer.invoke(IPC.DRIVE_UPLOAD_START, { groups }),
+
+  onDriveUploadProgress: (cb: (p: CopyProgressEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, p: CopyProgressEvent): void => cb(p)
+    ipcRenderer.on(IPC.DRIVE_UPLOAD_PROGRESS, listener)
+    return () => ipcRenderer.removeListener(IPC.DRIVE_UPLOAD_PROGRESS, listener)
+  },
+
+  openDriveRoot: (): Promise<void> => ipcRenderer.invoke(IPC.DRIVE_OPEN_ROOT)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
