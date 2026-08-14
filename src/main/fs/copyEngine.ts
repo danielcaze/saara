@@ -10,7 +10,7 @@ export interface CopyPlan {
 
 const CONCURRENCY = 4
 
-function uniqueFolderPath(desiredName: string, taken: Set<string>): string {
+export function uniqueFolderPath(desiredName: string, taken: Set<string>): string {
   // Note: deliberately does NOT check the filesystem for an existing
   // directory of this name — a pre-existing destination folder (e.g. from an
   // earlier copy job) should be reused, not treated as a naming collision.

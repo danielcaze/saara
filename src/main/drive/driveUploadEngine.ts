@@ -1,4 +1,5 @@
 import { sanitizeFolderName } from '../fs/sanitizeFolderName'
+import { uniqueFolderPath } from '../fs/copyEngine'
 import { DriveNetworkError, type DriveApi, type DriveFolderRef } from './driveApi'
 import type { CopyPlanGroup, CopyProgressEvent, CopySummary } from '../../shared/types'
 
@@ -39,9 +40,15 @@ export async function runDriveUploadPlan(
   }
   const totalFiles = plan.groups.reduce((sum, g) => sum + g.files.length, 0)
   let doneSoFar = 0
+  const takenFolderNames = new Set<string>()
 
   for (const group of plan.groups) {
-    const folderName = sanitizeFolderName(group.name)
+    // uniqueFolderPath (reused from copyEngine.ts's local-copy engine)
+    // suffixes a name only if it collides with another group *within this
+    // plan* — it deliberately doesn't check Drive for a pre-existing folder
+    // of that name, since a pre-existing one (from an earlier run) should be
+    // reused for skip-duplicates, not treated as a collision.
+    const folderName = uniqueFolderPath(sanitizeFolderName(group.name), takenFolderNames)
     let folder = await api.findFolder(plan.rootFolderId, folderName)
     if (!folder) folder = await api.createFolder(plan.rootFolderId, folderName)
     const existingNames = await api.listFileNames(folder.id)
@@ -75,9 +82,15 @@ export async function runDriveUploadPlan(
             // this surfaces that internal pause as a 'paused' progress event
             // too, so the UI doesn't just sit still with no feedback during
             // that internal retry. The outer retry loop here still matters
-            // for the *session-start* failure case, where uploadFile throws
-            // DriveNetworkError outright (no bytes sent yet, safe to retry
-            // the whole call).
+            // for two cases where uploadFile throws DriveNetworkError out
+            // instead of handling it internally: a session-start failure
+            // (no bytes sent yet, safe to retry the whole call from scratch)
+            // and a network blip during uploadFile's own internal
+            // "how many bytes did you actually get" resume-offset check
+            // (which has no retry loop of its own) — the latter can happen
+            // after bytes have already been sent, so the outer retry here
+            // starts a fresh upload session rather than truly resuming in
+            // that specific case.
             onPause: () =>
               onProgress({
                 groupId: group.id,

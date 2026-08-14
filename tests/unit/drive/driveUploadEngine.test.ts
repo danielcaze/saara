@@ -175,4 +175,54 @@ describe('runDriveUploadPlan', () => {
     expect(summary.copiedFiles).toBe(1)
     expect(summary.errors).toEqual([{ path: '/src/a.jpg', message: 'quota exceeded' }])
   })
+
+  it('surfaces onPause callbacks fired during a single uploadFile call as paused progress events', async () => {
+    // This is the primary way driveApi.ts's real uploadFile behaves after its
+    // Task 6 fix: it retries indefinitely *internally* on a network blip and
+    // calls onPause each time, rather than throwing DriveNetworkError back
+    // out to this orchestration layer. Without this test, that path — now
+    // the common case — was never exercised.
+    const { api } = createFakeApi()
+    const root = await getOrCreateRootFolder(api)
+    const pausingApi: DriveApi = {
+      ...api,
+      async uploadFile(params) {
+        params.onPause?.()
+        params.onPause?.()
+        return api.uploadFile(params)
+      }
+    }
+    const progress: CopyProgressEvent[] = []
+
+    const summary = await runDriveUploadPlan(
+      { rootFolderId: root.id, groups: [oneGroup[0]] },
+      (e) => progress.push(e),
+      pausingApi
+    )
+
+    expect(summary.copiedFiles).toBe(2)
+    expect(summary.errors).toEqual([])
+    expect(progress.filter((e) => e.status === 'paused').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('gives two same-named groups separate folders instead of merging them', async () => {
+    const sameNameGroups: CopyPlanGroup[] = [
+      { id: 'g1', name: 'Trip', files: [{ sourcePath: '/src/a.jpg', fileName: 'a.jpg' }] },
+      { id: 'g2', name: 'Trip', files: [{ sourcePath: '/src/b.jpg', fileName: 'b.jpg' }] }
+    ]
+    const { api, folders } = createFakeApi()
+    const root = await getOrCreateRootFolder(api)
+
+    const summary = await runDriveUploadPlan(
+      { rootFolderId: root.id, groups: sameNameGroups },
+      () => {},
+      api
+    )
+
+    expect(summary.copiedFiles).toBe(2)
+    expect(summary.errors).toEqual([])
+    expect(folders.has('Trip')).toBe(true)
+    expect(folders.has('Trip (2)')).toBe(true)
+    expect(folders.size).toBe(3) // root + "Trip" + "Trip (2)"
+  })
 })
