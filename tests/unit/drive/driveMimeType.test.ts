@@ -7,11 +7,15 @@ describe('mimeTypeForFile', () => {
     expect(mimeTypeForFile('photo.jpeg')).toBe('image/jpeg')
     expect(mimeTypeForFile('photo.png')).toBe('image/png')
     expect(mimeTypeForFile('photo.heic')).toBe('image/heic')
+    expect(mimeTypeForFile('photo.tif')).toBe('image/tiff')
+    expect(mimeTypeForFile('photo.tiff')).toBe('image/tiff')
   })
 
   it('maps common video extensions', () => {
     expect(mimeTypeForFile('clip.MP4')).toBe('video/mp4')
     expect(mimeTypeForFile('clip.mov')).toBe('video/quicktime')
+    expect(mimeTypeForFile('clip.mts')).toBe('video/mp2t')
+    expect(mimeTypeForFile('clip.m4v')).toBe('video/x-m4v')
   })
 
   it('falls back to application/octet-stream for unknown extensions', () => {
