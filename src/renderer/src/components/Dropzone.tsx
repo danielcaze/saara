@@ -35,7 +35,7 @@ export function Dropzone({
 
   function handleDragOver(e: DragEvent<HTMLDivElement>): void {
     e.preventDefault()
-    if (!disabled) setIsDragOver(true)
+    if (!disabled && !overrideBody) setIsDragOver(true)
   }
 
   function handleDragLeave(): void {
@@ -53,7 +53,13 @@ export function Dropzone({
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLDivElement>): void {
-    if (disabled) return
+    // The `overrideBody` check mirrors onClick/handleDrop's guard above.
+    // The target check ignores keydowns bubbling up from a focused
+    // descendant (the corner button below) — without it, Enter/Space on
+    // the corner button would *also* trigger this div's onPick, since
+    // native keydown bubbling isn't affected by the corner button's own
+    // click-level stopPropagation().
+    if (disabled || overrideBody || e.target !== e.currentTarget) return
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       onPick()
