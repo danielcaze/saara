@@ -516,6 +516,8 @@ Uses the global `fetch` (stable in the Node.js version Electron 39 bundles — n
 
 - [ ] **Step 1: Implement**
 
+> **Revised after code review** (caught before Task 7 was built, so no downstream rework was needed): the original draft had the access-token fetch outside the retry-classification try/catch (meaning a network failure during token refresh — which happens periodically, since access tokens expire hourly — would never be classified as retryable), escaped only single quotes in Drive queries (Drive's grammar requires backslashes escaped too), had no request timeouts (a stalled connection would hang forever instead of surfacing as a retryable error), and — despite being called "resumable" — actually restarted the whole file from byte 0 on every retry instead of resuming from where it left off. The version below fixes all four.
+
 ```ts
 // src/main/drive/driveApi.ts
 import fs from 'node:fs'
@@ -529,29 +531,61 @@ export interface DriveFolderRef {
 
 export class DriveNetworkError extends Error {}
 
-const RETRYABLE_CODES = new Set(['ETIMEDOUT', 'ENOTFOUND', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN'])
+const RETRYABLE_CODES = new Set([
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EAI_AGAIN',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'EPIPE',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_BODY_TIMEOUT',
+  'UND_ERR_SOCKET'
+])
 
 function isRetryableNetworkError(err: unknown): boolean {
+  if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')) return true
   const direct = (err as { code?: string } | undefined)?.code
   const nested = (err as { cause?: { code?: string } } | undefined)?.cause?.code
   const code = direct ?? nested
   return typeof code === 'string' && RETRYABLE_CODES.has(code)
 }
 
+const FETCH_TIMEOUT_MS = 30000
+
 export interface DriveApi {
   findFolder(parentId: string, name: string): Promise<DriveFolderRef | null>
   createFolder(parentId: string, name: string): Promise<DriveFolderRef>
   listFileNames(folderId: string): Promise<Set<string>>
-  uploadFile(params: { parentId: string; filePath: string; fileName: string }): Promise<void>
+  uploadFile(params: {
+    parentId: string
+    filePath: string
+    fileName: string
+    onPause?: () => void
+  }): Promise<void>
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Escape order matters: backslashes must be escaped before quotes, otherwise
+// the backslash inserted to escape a quote would itself need escaping.
+// Google's Drive API query grammar requires both to be escaped.
+function escapeDriveQueryValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
 }
 
 export function createGoogleDriveApi(accessTokenProvider: () => Promise<string>): DriveApi {
   async function authedFetch(url: string, init: RequestInit = {}): Promise<Response> {
-    const token = await accessTokenProvider()
-    const headers = new Headers(init.headers)
-    headers.set('Authorization', `Bearer ${token}`)
     try {
-      return await fetch(url, { ...init, headers })
+      const token = await accessTokenProvider()
+      const headers = new Headers(init.headers)
+      headers.set('Authorization', `Bearer ${token}`)
+      return await fetch(url, { ...init, headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     } catch (err) {
       if (isRetryableNetworkError(err)) {
         throw new DriveNetworkError('Network error talking to Google Drive.')
@@ -560,9 +594,36 @@ export function createGoogleDriveApi(accessTokenProvider: () => Promise<string>)
     }
   }
 
+  // Per Google's resumable-upload protocol: an empty PUT with
+  // `Content-Range: bytes */TOTAL` to the same session URL asks Drive how
+  // many bytes it has actually received so far, so an interrupted upload can
+  // resume from that offset instead of restarting from byte 0.
+  async function queryUploadedBytes(uploadUrl: string, totalSize: number): Promise<number> {
+    let res: Response
+    try {
+      res = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Range': `bytes */${totalSize}` },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+      })
+    } catch (err) {
+      if (isRetryableNetworkError(err)) {
+        throw new DriveNetworkError('Network error while resuming a Drive upload.')
+      }
+      throw err
+    }
+    if (res.status === 308) {
+      const range = res.headers.get('range')
+      const match = range?.match(/bytes=0-(\d+)/)
+      return match ? Number(match[1]) + 1 : 0
+    }
+    if (res.ok) return totalSize
+    throw new Error(`Failed to check Drive upload progress (${res.status}).`)
+  }
+
   return {
     async findFolder(parentId, name) {
-      const escaped = name.replace(/'/g, "\\'")
+      const escaped = escapeDriveQueryValue(name)
       const q = encodeURIComponent(
         `'${parentId}' in parents and name = '${escaped}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
       )
@@ -579,11 +640,18 @@ export function createGoogleDriveApi(accessTokenProvider: () => Promise<string>)
     },
 
     async createFolder(parentId, name) {
-      const res = await authedFetch('https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
-      })
+      const res = await authedFetch(
+        'https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            mimeType: 'application/vnd.google-apps.folder',
+            parents: [parentId]
+          })
+        }
+      )
       if (!res.ok) throw new Error(`Failed to create a Drive folder (${res.status}).`)
       const data = (await res.json()) as { id?: string; name?: string; webViewLink?: string }
       if (!data.id || !data.name) throw new Error('Drive did not return the created folder.')
@@ -609,47 +677,70 @@ export function createGoogleDriveApi(accessTokenProvider: () => Promise<string>)
       return names
     },
 
-    async uploadFile({ parentId, filePath, fileName }) {
+    async uploadFile({ parentId, filePath, fileName, onPause }) {
       const stat = await fs.promises.stat(filePath)
+      const totalSize = stat.size
 
-      let startRes: Response
+      let uploadUrl: string
       try {
-        startRes = await authedFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json; charset=UTF-8',
-            'X-Upload-Content-Type': mimeTypeForFile(fileName),
-            'X-Upload-Content-Length': String(stat.size)
-          },
-          body: JSON.stringify({ name: fileName, parents: [parentId] })
-        })
+        const startRes = await authedFetch(
+          'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json; charset=UTF-8',
+              'X-Upload-Content-Type': mimeTypeForFile(fileName),
+              'X-Upload-Content-Length': String(totalSize)
+            },
+            body: JSON.stringify({ name: fileName, parents: [parentId] })
+          }
+        )
+        if (!startRes.ok) throw new Error(`Failed to start a Drive upload (${startRes.status}).`)
+        const location = startRes.headers.get('location')
+        if (!location) throw new Error('Drive did not return an upload session URL.')
+        uploadUrl = location
       } catch (err) {
         if (err instanceof DriveNetworkError) throw err
-        throw new Error('Failed to start a Drive upload.')
+        throw err instanceof Error
+          ? new Error('Failed to start a Drive upload.', { cause: err })
+          : new Error('Failed to start a Drive upload.')
       }
-      if (!startRes.ok) throw new Error(`Failed to start a Drive upload (${startRes.status}).`)
-      const uploadUrl = startRes.headers.get('location')
-      if (!uploadUrl) throw new Error('Drive did not return an upload session URL.')
 
-      let putRes: Response
-      try {
-        putRes = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': mimeTypeForFile(fileName),
-            'Content-Length': String(stat.size)
-          },
-          body: fs.createReadStream(filePath) as unknown as BodyInit,
-          // @ts-expect-error Node's fetch requires this to accept a streaming request body
-          duplex: 'half'
-        })
-      } catch (err) {
-        if (isRetryableNetworkError(err)) {
-          throw new DriveNetworkError('Network error while uploading to Drive.')
+      // Uploads in a single PUT, but if it's interrupted mid-flight, queries
+      // how many bytes Drive actually received and resumes from that offset
+      // on the *same* session URL rather than restarting the whole file —
+      // this is what makes the upload genuinely resumable, not just
+      // retryable-from-scratch. Retries indefinitely with capped backoff,
+      // matching the app's "pause and wait for the connection to come back"
+      // design rather than giving up after N attempts.
+      let uploadedBytes = 0
+      let attempt = 0
+      for (;;) {
+        let stream: fs.ReadStream | null = null
+        try {
+          stream = fs.createReadStream(filePath, { start: uploadedBytes })
+          const res = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': mimeTypeForFile(fileName),
+              'Content-Range': `bytes ${uploadedBytes}-${totalSize - 1}/${totalSize}`
+            },
+            body: stream as unknown as BodyInit,
+            // @ts-expect-error Node's fetch requires this to accept a streaming request body
+            duplex: 'half',
+            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+          })
+          if (res.ok) return
+          throw new Error(`Drive upload failed (${res.status}).`)
+        } catch (err) {
+          stream?.destroy()
+          if (!isRetryableNetworkError(err)) throw err
+          attempt++
+          onPause?.()
+          await wait(Math.min(5000 * 2 ** (attempt - 1), 20000))
+          uploadedBytes = await queryUploadedBytes(uploadUrl, totalSize)
         }
-        throw err
       }
-      if (!putRes.ok) throw new Error(`Drive upload failed (${putRes.status}).`)
     }
   }
 }
@@ -678,7 +769,25 @@ git commit -m "feat: add Drive REST client (folders, listing, resumable upload)"
 
 This is where the actual "reuse folder, skip duplicates, pause-and-retry on network errors" logic lives, and it's fully unit-testable because it only depends on the `DriveApi` interface, not real network calls.
 
-- [ ] **Step 1: Write the failing tests**
+> **Revised after code review**: the original draft was missing a folder-name collision guard — `copyEngine.ts` (the existing local-copy engine) already handles two *different* groups in one plan sanitizing to the same folder name via a `uniqueFolderPath`/`takenFolderNames` pair (suffixing the second one `" (2)"`, etc.), but the first draft of this file called `sanitizeFolderName` directly with no equivalent guard — meaning two same-named groups would silently merge into one Drive folder instead of getting separate ones. Fixed below by exporting and reusing `copyEngine.ts`'s existing helper rather than duplicating it. The review also found the test suite never exercised `onPause` actually firing during a single `uploadFile` call (the primary way Task 6's real `driveApi.ts` behaves now — it retries internally and calls `onPause` itself), and a misleading comment about why the outer retry loop still matters — both fixed below too.
+
+- [ ] **Step 1: Export `uniqueFolderPath` from `copyEngine.ts` for reuse**
+
+In `src/main/fs/copyEngine.ts`, change:
+
+```ts
+function uniqueFolderPath(desiredName: string, taken: Set<string>): string {
+```
+
+to:
+
+```ts
+export function uniqueFolderPath(desiredName: string, taken: Set<string>): string {
+```
+
+(Only the `export` keyword is added — the function body, its existing usage inside `copyEngine.ts`, and everything else in that file stays exactly as-is.)
+
+- [ ] **Step 2: Write the failing tests**
 
 ```ts
 // tests/unit/drive/driveUploadEngine.test.ts
@@ -801,10 +910,15 @@ describe('runDriveUploadPlan', () => {
     let attempts = 0
     const flaky: DriveApi = {
       ...api,
+      // Records every attempt (success or failure) before deciding whether
+      // to throw, so a file that fails twice then succeeds shows up 3 times
+      // in `uploadCalls` — the original version of this mock only recorded
+      // the delegating/success call, making the 3-then-1 pattern below
+      // structurally unreachable no matter how the retry loop was written.
       async uploadFile(params) {
         attempts++
+        uploadCalls.push(params.fileName)
         if (attempts < 3) throw new DriveNetworkError('simulated blip')
-        return api.uploadFile(params)
       }
     }
     const progress: CopyProgressEvent[] = []
@@ -843,10 +957,60 @@ describe('runDriveUploadPlan', () => {
     expect(summary.copiedFiles).toBe(1)
     expect(summary.errors).toEqual([{ path: '/src/a.jpg', message: 'quota exceeded' }])
   })
+
+  it('surfaces onPause callbacks fired during a single uploadFile call as paused progress events', async () => {
+    // This is the primary way driveApi.ts's real uploadFile behaves after its
+    // Task 6 fix: it retries indefinitely *internally* on a network blip and
+    // calls onPause each time, rather than throwing DriveNetworkError back
+    // out to this orchestration layer. Without this test, that path — now
+    // the common case — was never exercised.
+    const { api } = createFakeApi()
+    const root = await getOrCreateRootFolder(api)
+    const pausingApi: DriveApi = {
+      ...api,
+      async uploadFile(params) {
+        params.onPause?.()
+        params.onPause?.()
+        return api.uploadFile(params)
+      }
+    }
+    const progress: CopyProgressEvent[] = []
+
+    const summary = await runDriveUploadPlan(
+      { rootFolderId: root.id, groups: [oneGroup[0]] },
+      (e) => progress.push(e),
+      pausingApi
+    )
+
+    expect(summary.copiedFiles).toBe(2)
+    expect(summary.errors).toEqual([])
+    expect(progress.filter((e) => e.status === 'paused').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('gives two same-named groups separate folders instead of merging them', async () => {
+    const sameNameGroups: CopyPlanGroup[] = [
+      { id: 'g1', name: 'Trip', files: [{ sourcePath: '/src/a.jpg', fileName: 'a.jpg' }] },
+      { id: 'g2', name: 'Trip', files: [{ sourcePath: '/src/b.jpg', fileName: 'b.jpg' }] }
+    ]
+    const { api, folders } = createFakeApi()
+    const root = await getOrCreateRootFolder(api)
+
+    const summary = await runDriveUploadPlan(
+      { rootFolderId: root.id, groups: sameNameGroups },
+      () => {},
+      api
+    )
+
+    expect(summary.copiedFiles).toBe(2)
+    expect(summary.errors).toEqual([])
+    expect(folders.has('Trip')).toBe(true)
+    expect(folders.has('Trip (2)')).toBe(true)
+    expect(folders.size).toBe(3) // root + "Trip" + "Trip (2)"
+  })
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [ ] **Step 3: Run tests to verify they fail**
 
 ```bash
 npx vitest run tests/unit/drive/driveUploadEngine.test.ts
@@ -854,11 +1018,12 @@ npx vitest run tests/unit/drive/driveUploadEngine.test.ts
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 4: Implement**
 
 ```ts
 // src/main/drive/driveUploadEngine.ts
 import { sanitizeFolderName } from '../fs/sanitizeFolderName'
+import { uniqueFolderPath } from '../fs/copyEngine'
 import { DriveNetworkError, type DriveApi, type DriveFolderRef } from './driveApi'
 import type { CopyPlanGroup, CopyProgressEvent, CopySummary } from '../../shared/types'
 
@@ -889,9 +1054,15 @@ export async function runDriveUploadPlan(
   const summary: CopySummary = { totalFiles: 0, copiedFiles: 0, skippedFiles: 0, conflicts: [], errors: [] }
   const totalFiles = plan.groups.reduce((sum, g) => sum + g.files.length, 0)
   let doneSoFar = 0
+  const takenFolderNames = new Set<string>()
 
   for (const group of plan.groups) {
-    const folderName = sanitizeFolderName(group.name)
+    // uniqueFolderPath (reused from copyEngine.ts's local-copy engine)
+    // suffixes a name only if it collides with another group *within this
+    // plan* — it deliberately doesn't check Drive for a pre-existing folder
+    // of that name, since a pre-existing one (from an earlier run) should be
+    // reused for skip-duplicates, not treated as a collision.
+    const folderName = uniqueFolderPath(sanitizeFolderName(group.name), takenFolderNames)
     let folder = await api.findFolder(plan.rootFolderId, folderName)
     if (!folder) folder = await api.createFolder(plan.rootFolderId, folderName)
     const existingNames = await api.listFileNames(folder.id)
@@ -916,7 +1087,34 @@ export async function runDriveUploadPlan(
       let attempt = 0
       for (;;) {
         try {
-          await api.uploadFile({ parentId: folder.id, filePath: file.sourcePath, fileName: file.fileName })
+          await api.uploadFile({
+            parentId: folder.id,
+            filePath: file.sourcePath,
+            fileName: file.fileName,
+            // driveApi's uploadFile already retries indefinitely on its own
+            // for a mid-upload network blip (true resumable-upload retry);
+            // this surfaces that internal pause as a 'paused' progress event
+            // too, so the UI doesn't just sit still with no feedback during
+            // that internal retry. The outer retry loop here still matters
+            // for two cases where uploadFile throws DriveNetworkError out
+            // instead of handling it internally: a session-start failure
+            // (no bytes sent yet, safe to retry the whole call from scratch)
+            // and a network blip during uploadFile's own internal
+            // "how many bytes did you actually get" resume-offset check
+            // (which has no retry loop of its own) — the latter can happen
+            // after bytes have already been sent, so the outer retry here
+            // starts a fresh upload session rather than truly resuming in
+            // that specific case.
+            onPause: () =>
+              onProgress({
+                groupId: group.id,
+                groupName: group.name,
+                fileName: file.fileName,
+                filesCopiedSoFar: doneSoFar,
+                totalFiles,
+                status: 'paused'
+              })
+          })
           summary.copiedFiles++
           break
         } catch (err) {
@@ -957,18 +1155,18 @@ export async function runDriveUploadPlan(
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 5: Run tests to verify they pass**
 
 ```bash
 npx vitest run tests/unit/drive/driveUploadEngine.test.ts
 ```
 
-Expected: PASS, 7 tests. (This will fail to typecheck/import until Task 9 adds the `status` field to `CopyProgressEvent` — if running this task's tests before Task 9, expect a type error on the `status:` properties. Do Task 9 first if executing tasks out of order; as written, this plan does Task 9 after, so temporarily accept a type error here and re-verify after Task 9's Step 4.)
+Expected: PASS, 9 tests. (This will fail to typecheck/import until Task 9 adds the `status` field to `CopyProgressEvent` — if running this task's tests before Task 9, expect a type error on the `status:` properties. Do Task 9 first if executing tasks out of order; as written, this plan does Task 9 after, so temporarily accept a type error here and re-verify after Task 9's Step 4.)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/main/drive/driveUploadEngine.ts tests/unit/drive/driveUploadEngine.test.ts
+git add src/main/fs/copyEngine.ts src/main/drive/driveUploadEngine.ts tests/unit/drive/driveUploadEngine.test.ts
 git commit -m "feat: add Drive upload orchestration (skip-duplicates, pause/retry on network errors)"
 ```
 
