@@ -2550,7 +2550,30 @@ git commit -m "feat: wire Drive toggle, connect flow, paused-upload UI, view-in-
 **Files:**
 - Modify: `src/renderer/src/theme.css`
 
-- [ ] **Step 1: Add the new rules**
+> **Revised after code review**: Task 14 added a `disabled` "Connecting…" state to the "Connect Google Drive" button (`className="field-button"`), but `theme.css`'s existing disabled styling only targets `button.primary:disabled` — `field-button` was never included, so during the OAuth wait (which can legitimately take a while) the button looked identical to its normal, clickable state, giving no visual sign it was inert. Fixed below by adding `field-button` to that existing rule's selector, alongside the new corner-button/paused-state rules this task was already adding.
+
+- [ ] **Step 1: Add `field-button` to the existing disabled-button rule**
+
+In `src/renderer/src/theme.css`, change:
+
+```css
+button.primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+```
+
+to:
+
+```css
+button.primary:disabled,
+button.field-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+```
+
+- [ ] **Step 2: Add the new rules**
 
 Append to the end of `src/renderer/src/theme.css`:
 
@@ -2587,17 +2610,17 @@ Append to the end of `src/renderer/src/theme.css`:
 }
 ```
 
-- [ ] **Step 2: Verify typecheck (CSS isn't type-checked, but confirm nothing else broke)**
+- [ ] **Step 3: Verify typecheck (CSS isn't type-checked, but confirm nothing else broke)**
 
 ```bash
 npm run typecheck
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add src/renderer/src/theme.css
-git commit -m "feat: style the Dropzone corner toggle button"
+git commit -m "feat: style the Dropzone corner toggle button and disabled field-button state"
 ```
 
 ---
