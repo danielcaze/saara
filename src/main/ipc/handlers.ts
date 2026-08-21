@@ -6,6 +6,7 @@ import {
   analyzeRequestSchema,
   reclusterRequestSchema,
   getThumbnailRequestSchema,
+  getLightboxPreviewRequestSchema,
   copyStartRequestSchema,
   openPathRequestSchema,
   settingsSetRequestSchema,
@@ -13,7 +14,7 @@ import {
 } from '../../shared/ipcSchemas'
 import { analyzeSource, recluster } from '../importSession'
 import { runCopyPlan } from '../fs/copyEngine'
-import { extractThumbnail } from '../thumbnails/extractThumbnail'
+import { extractThumbnail, extractLightboxPreview } from '../thumbnails/extractThumbnail'
 import { getSettings, setSettings } from '../settings/settingsStore'
 import {
   getDriveTokens,
@@ -82,6 +83,12 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle(IPC.GET_THUMBNAIL, async (_event, payload) => {
     const { path, mediaType } = getThumbnailRequestSchema.parse(payload)
     const dataUrl = await extractThumbnail(path, mediaType)
+    return dataUrl ? { dataUrl } : null
+  })
+
+  ipcMain.handle(IPC.GET_LIGHTBOX_PREVIEW, async (_event, payload) => {
+    const { path, mediaType } = getLightboxPreviewRequestSchema.parse(payload)
+    const dataUrl = await extractLightboxPreview(path, mediaType)
     return dataUrl ? { dataUrl } : null
   })
 

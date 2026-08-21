@@ -34,6 +34,9 @@ const saaraAPI = {
   getThumbnail: (path: string, mediaType: MediaType): Promise<{ dataUrl: string } | null> =>
     ipcRenderer.invoke(IPC.GET_THUMBNAIL, { path, mediaType }),
 
+  getLightboxPreview: (path: string, mediaType: MediaType): Promise<{ dataUrl: string } | null> =>
+    ipcRenderer.invoke(IPC.GET_LIGHTBOX_PREVIEW, { path, mediaType }),
+
   copyStart: (destinationRoot: string, groups: CopyPlanGroup[]): Promise<CopySummary> =>
     ipcRenderer.invoke(IPC.COPY_START, { destinationRoot, groups }),
 

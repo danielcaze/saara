@@ -13,9 +13,9 @@ import {
 import type { PhotoGroup } from '../../../shared/types'
 
 import { flattenGroupFiles } from '../hooks/importWorkflowReducer'
-import { useThumbnailDataUrl } from '../hooks/useThumbnailDataUrl'
-
-const NEW_GROUP_VALUE = '__new__'
+import { useLightboxPreview } from '../hooks/useLightboxPreview'
+import { DeleteConfirmModal } from './DeleteConfirmModal'
+import { MoveGroupModal } from './MoveGroupModal'
 
 interface Props {
   groups: PhotoGroup[]
@@ -50,9 +50,9 @@ export function Lightbox({
   const previouslyFocused = useRef<HTMLElement | null>(null)
   const [renamingForPath, setRenamingForPath] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
-  const [movePickerForPath, setMovePickerForPath] = useState<string | null>(null)
+  const [showMoveModal, setShowMoveModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const renaming = renamingForPath === current?.file.path
-  const showMovePicker = movePickerForPath === current?.file.path
 
   useEffect(() => {
     previouslyFocused.current = document.activeElement as HTMLElement | null
@@ -109,7 +109,7 @@ export function Lightbox({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose, onPrev, onNext])
 
-  const { dataUrl, failed } = useThumbnailDataUrl(
+  const { dataUrl, failed } = useLightboxPreview(
     current?.file.path ?? null,
     current?.file.mediaType ?? 'unsupported'
   )
@@ -117,7 +117,11 @@ export function Lightbox({
   if (!current) return null
 
   const isSelected = selectedPaths.has(current.file.path)
-  const targetPaths = selectedPaths.size > 0 ? Array.from(selectedPaths) : [current.file.path]
+  // Lightbox actions always target the single open photo, never the active
+  // selection — bulk actions live outside the lightbox instead (the
+  // sticky-footer bulk-action bar), so there's one mental model per
+  // surface rather than Delete meaning different things in different places.
+  const currentPath = current.file.path
 
   function startRename(): void {
     setRenameValue(current.file.fileName)
@@ -130,6 +134,10 @@ export function Lightbox({
     setRenamingForPath(null)
   }
 
+  function closeIfBackdrop(e: React.MouseEvent<HTMLDivElement>): void {
+    if (e.target === e.currentTarget) onClose()
+  }
+
   return (
     <div
       className="lightbox-overlay"
@@ -138,6 +146,7 @@ export function Lightbox({
       role="dialog"
       aria-modal="true"
       aria-label={`${current.file.fileName}, photo ${index + 1} of ${flat.length}`}
+      onClick={closeIfBackdrop}
     >
       <div className="lightbox-toolbar">
         <button className="icon-button" onClick={onClose} aria-label="Close">
@@ -151,7 +160,7 @@ export function Lightbox({
             className="icon-button"
             aria-pressed={isSelected}
             aria-label={isSelected ? 'Deselect this photo' : 'Select this photo'}
-            onClick={() => onToggleSelect(current.file.path)}
+            onClick={() => onToggleSelect(currentPath)}
           >
             {isSelected ? (
               <CheckSquare size={18} weight="fill" aria-hidden="true" />
@@ -160,45 +169,21 @@ export function Lightbox({
             )}
             Select
           </button>
-          <button className="icon-button" aria-label="Delete" onClick={() => onDelete(targetPaths)}>
+          <button
+            className="icon-button"
+            aria-label="Delete"
+            onClick={() => setShowDeleteConfirm(true)}
+          >
             <Trash size={18} aria-hidden="true" /> Delete
           </button>
           <button
             className="icon-button"
             aria-label="Move"
-            aria-expanded={showMovePicker}
-            onClick={() =>
-              setMovePickerForPath((path) =>
-                path === current.file.path ? null : current.file.path
-              )
-            }
+            aria-expanded={showMoveModal}
+            onClick={() => setShowMoveModal(true)}
           >
             <FolderSimple size={18} aria-hidden="true" /> Move
           </button>
-          {showMovePicker && (
-            <select
-              className="field"
-              aria-label="Move to group"
-              defaultValue=""
-              onChange={(e) => {
-                const value = e.target.value
-                setMovePickerForPath(null)
-                if (!value) return
-                if (value === NEW_GROUP_VALUE) onCreateGroupAndMove(targetPaths)
-                else onMove(targetPaths, value)
-              }}
-            >
-              <option value="" disabled>
-                Choose a group…
-              </option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-              <option value={NEW_GROUP_VALUE}>+ New group</option>
-            </select>
-          )}
           {renaming ? (
             <input
               className="field"
@@ -218,7 +203,7 @@ export function Lightbox({
           )}
         </div>
       </div>
-      <div className="lightbox-stage">
+      <div className="lightbox-stage" onClick={closeIfBackdrop}>
         <button
           className="lightbox-nav lightbox-nav-prev"
           onClick={onPrev}
@@ -249,6 +234,33 @@ export function Lightbox({
           <CaretRight size={24} aria-hidden="true" />
         </button>
       </div>
+
+      {showDeleteConfirm && (
+        <DeleteConfirmModal
+          paths={[currentPath]}
+          onConfirm={() => {
+            setShowDeleteConfirm(false)
+            onDelete([currentPath])
+          }}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
+
+      {showMoveModal && (
+        <MoveGroupModal
+          groups={groups}
+          paths={[currentPath]}
+          onMove={(targetGroupId) => {
+            setShowMoveModal(false)
+            onMove([currentPath], targetGroupId)
+          }}
+          onCreateGroupAndMove={() => {
+            setShowMoveModal(false)
+            onCreateGroupAndMove([currentPath])
+          }}
+          onCancel={() => setShowMoveModal(false)}
+        />
+      )}
     </div>
   )
 }
