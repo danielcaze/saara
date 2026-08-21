@@ -1,12 +1,12 @@
 // src/renderer/src/hooks/useImportWorkflow.ts
 import { useCallback, useEffect, useReducer } from 'react'
-import type {
-  AnalyzeProgress,
-  CopyProgressEvent,
-  CopySummary,
-  DriveStatus,
-  PhotoGroup
-} from '../../../shared/types'
+import {
+  defaultGroupName,
+  flattenGroupFiles,
+  initialState,
+  reducer,
+  type State
+} from './importWorkflowReducer'
 
 // Electron's ipcRenderer.invoke wraps main-process errors as
 // `Error invoking remote method '<channel>': Error: <original message>` —
@@ -15,123 +15,6 @@ function friendlyIpcError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err)
   const match = raw.match(/^Error invoking remote method '[^']*':\s*(?:Error:\s*)?(.*)$/s)
   return match ? match[1] : raw
-}
-
-// Mirrors src/shared/clustering/suggestGroupName.ts's date-stamp convention,
-// so a blanked-out rename falls back to the same name auto-generation would
-// have produced, not a generic placeholder.
-function defaultGroupName(group: PhotoGroup): string {
-  if (group.isNoDateGroup || !group.startDate || !group.endDate) return 'No date'
-  const start = group.startDate.slice(0, 10)
-  const end = group.endDate.slice(0, 10)
-  return start === end ? start : `${start}_to_${end}`
-}
-
-type DestinationType = 'local' | 'drive'
-
-interface State {
-  sourcePath: string | null
-  destinationPath: string | null
-  destinationType: DestinationType
-  driveStatus: DriveStatus
-  driveConnecting: boolean
-  driveError: string | null
-  thresholdHours: number
-  analyzeProgress: AnalyzeProgress | null
-  analyzeError: string | null
-  groups: PhotoGroup[]
-  copying: boolean
-  copyProgress: CopyProgressEvent | null
-  copySummary: CopySummary | null
-  copyError: string | null
-}
-
-type Action =
-  | { type: 'SET_SOURCE'; path: string }
-  | { type: 'SET_DESTINATION'; path: string }
-  | { type: 'TOGGLE_DESTINATION_TYPE' }
-  | { type: 'DRIVE_STATUS_LOADED'; status: DriveStatus }
-  | { type: 'DRIVE_CONNECTING' }
-  | { type: 'DRIVE_CONNECTED'; status: DriveStatus }
-  | { type: 'DRIVE_CONNECT_ERROR'; message: string }
-  | { type: 'DRIVE_DISCONNECTED' }
-  | { type: 'SET_THRESHOLD_HOURS'; hours: number }
-  | { type: 'ANALYZE_PROGRESS'; progress: AnalyzeProgress }
-  | { type: 'ANALYZE_DONE'; groups: PhotoGroup[] }
-  | { type: 'ANALYZE_ERROR'; message: string }
-  | { type: 'SET_GROUPS'; groups: PhotoGroup[] }
-  | { type: 'START_COPY' }
-  | { type: 'COPY_PROGRESS'; progress: CopyProgressEvent }
-  | { type: 'COPY_DONE'; summary: CopySummary }
-  | { type: 'COPY_ERROR'; message: string }
-
-const initialState: State = {
-  sourcePath: null,
-  destinationPath: null,
-  destinationType: 'local',
-  driveStatus: { connected: false, email: null },
-  driveConnecting: false,
-  driveError: null,
-  thresholdHours: 24,
-  analyzeProgress: null,
-  analyzeError: null,
-  groups: [],
-  copying: false,
-  copyProgress: null,
-  copySummary: null,
-  copyError: null
-}
-
-function reducer(state: State, action: Action): State {
-  switch (action.type) {
-    case 'SET_SOURCE':
-      return {
-        ...state,
-        sourcePath: action.path,
-        groups: [],
-        analyzeError: null,
-        copySummary: null
-      }
-    case 'SET_DESTINATION':
-      return { ...state, destinationPath: action.path, copySummary: null }
-    case 'TOGGLE_DESTINATION_TYPE':
-      return {
-        ...state,
-        destinationType: state.destinationType === 'local' ? 'drive' : 'local',
-        copySummary: null,
-        driveError: null
-      }
-    case 'DRIVE_STATUS_LOADED':
-      return { ...state, driveStatus: action.status }
-    case 'DRIVE_CONNECTING':
-      return { ...state, driveConnecting: true, driveError: null }
-    case 'DRIVE_CONNECTED':
-      return { ...state, driveConnecting: false, driveStatus: action.status, driveError: null }
-    case 'DRIVE_CONNECT_ERROR':
-      return { ...state, driveConnecting: false, driveError: action.message }
-    case 'DRIVE_DISCONNECTED':
-      return { ...state, driveStatus: { connected: false, email: null } }
-    case 'SET_THRESHOLD_HOURS':
-      return { ...state, thresholdHours: action.hours }
-    case 'ANALYZE_PROGRESS':
-      return { ...state, analyzeProgress: action.progress, analyzeError: null }
-    case 'ANALYZE_DONE':
-      return { ...state, groups: action.groups, analyzeProgress: null, analyzeError: null }
-    case 'ANALYZE_ERROR':
-      return { ...state, analyzeProgress: null, analyzeError: action.message, groups: [] }
-    case 'SET_GROUPS':
-      return { ...state, groups: action.groups }
-    case 'START_COPY':
-      return { ...state, copying: true, copyProgress: null, copySummary: null, copyError: null }
-    case 'COPY_PROGRESS':
-      return { ...state, copyProgress: action.progress }
-    case 'COPY_DONE':
-      return { ...state, copying: false, copySummary: action.summary }
-    case 'COPY_ERROR':
-      return { ...state, copying: false, copyError: action.message }
-    default:
-      return state
-  }
 }
 
 interface ImportWorkflow {
@@ -146,6 +29,16 @@ interface ImportWorkflow {
   recluster: (hours: number) => Promise<void>
   renameGroup: (groupId: string, name: string) => void
   startCopy: () => Promise<void>
+  openViewer: (path: string) => void
+  closeViewer: () => void
+  viewerNext: () => void
+  viewerPrev: () => void
+  toggleSelect: (path: string) => void
+  clearSelection: () => void
+  deleteFiles: (paths: string[]) => void
+  moveFiles: (paths: string[], targetGroupId: string) => void
+  createGroupAndMoveFiles: (paths: string[]) => void
+  renameFile: (path: string, fileName: string) => void
 }
 
 export function useImportWorkflow(): ImportWorkflow {
@@ -267,6 +160,55 @@ export function useImportWorkflow(): ImportWorkflow {
     }
   }, [state.destinationType, state.destinationPath, state.driveStatus.connected, state.groups])
 
+  const openViewer = useCallback(
+    (path: string) => {
+      const index = flattenGroupFiles(state.groups).findIndex((f) => f.file.path === path)
+      if (index === -1) return
+      dispatch({ type: 'OPEN_VIEWER', index })
+    },
+    [state.groups]
+  )
+
+  const closeViewer = useCallback(() => {
+    dispatch({ type: 'CLOSE_VIEWER' })
+  }, [])
+
+  const viewerNext = useCallback(() => {
+    if (state.viewerIndex === null) return
+    dispatch({ type: 'SET_VIEWER_INDEX', index: state.viewerIndex + 1 })
+  }, [state.viewerIndex])
+
+  const viewerPrev = useCallback(() => {
+    if (state.viewerIndex === null) return
+    dispatch({ type: 'SET_VIEWER_INDEX', index: state.viewerIndex - 1 })
+  }, [state.viewerIndex])
+
+  const toggleSelect = useCallback((path: string) => {
+    dispatch({ type: 'TOGGLE_SELECT', path })
+  }, [])
+
+  const clearSelection = useCallback(() => {
+    dispatch({ type: 'CLEAR_SELECTION' })
+  }, [])
+
+  const deleteFiles = useCallback((paths: string[]) => {
+    dispatch({ type: 'DELETE_FILES', paths })
+  }, [])
+
+  const moveFiles = useCallback((paths: string[], targetGroupId: string) => {
+    dispatch({ type: 'MOVE_FILES', paths, targetGroupId })
+  }, [])
+
+  const createGroupAndMoveFiles = useCallback((paths: string[]) => {
+    const groupId = `group-new-${crypto.randomUUID()}`
+    dispatch({ type: 'CREATE_GROUP', groupId })
+    dispatch({ type: 'MOVE_FILES', paths, targetGroupId: groupId })
+  }, [])
+
+  const renameFile = useCallback((path: string, fileName: string) => {
+    dispatch({ type: 'RENAME_FILE', path, fileName })
+  }, [])
+
   return {
     state,
     pickSource,
@@ -278,6 +220,16 @@ export function useImportWorkflow(): ImportWorkflow {
     disconnectDrive,
     recluster,
     renameGroup,
-    startCopy
+    startCopy,
+    openViewer,
+    closeViewer,
+    viewerNext,
+    viewerPrev,
+    toggleSelect,
+    clearSelection,
+    deleteFiles,
+    moveFiles,
+    createGroupAndMoveFiles,
+    renameFile
   }
 }
