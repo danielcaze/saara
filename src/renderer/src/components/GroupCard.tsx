@@ -1,5 +1,12 @@
 import { useId, useState } from 'react'
-import { CaretRight, CaretDown, CheckSquare, PencilSimple, Square } from '@phosphor-icons/react'
+import {
+  CaretRight,
+  CaretDown,
+  CheckSquare,
+  DotsSixVertical,
+  PencilSimple,
+  Square
+} from '@phosphor-icons/react'
 
 import type { PhotoGroup } from '../../../shared/types'
 
@@ -12,6 +19,11 @@ interface Props {
   onRenameFile: (path: string, fileName: string) => void
   onToggleSelect: (path: string) => void
   onOpenViewer: (path: string) => void
+  dragging: { path: string; groupId: string } | null
+  onDragStart: (path: string, groupId: string) => void
+  onDragEnd: () => void
+  onMoveToGroup: (path: string, groupId: string) => void
+  onReorder: (groupId: string, path: string, targetIndex: number) => void
 }
 
 export function GroupCard({
@@ -20,13 +32,64 @@ export function GroupCard({
   onRename,
   onRenameFile,
   onToggleSelect,
-  onOpenViewer
+  onOpenViewer,
+  dragging,
+  onDragStart,
+  onDragEnd,
+  onMoveToGroup,
+  onReorder
 }: Props): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputId = useId()
   const hasActiveSelection = selectedPaths.size > 0
+  const isDraggingFromThisGroup = dragging?.groupId === group.id
+  const isDraggingFromAnotherGroup = dragging !== null && !isDraggingFromThisGroup
+  const [insertionIndex, setInsertionIndex] = useState<number | null>(null)
+  const [isGroupDropTarget, setIsGroupDropTarget] = useState(false)
+
+  function dragHandle(path: string, fileName: string): React.JSX.Element {
+    return (
+      <button
+        type="button"
+        className="drag-handle"
+        draggable
+        aria-label={`Drag ${fileName}`}
+        onDragStart={(event) => {
+          event.dataTransfer.effectAllowed = 'move'
+          event.dataTransfer.setData('text/plain', path)
+          onDragStart(path, group.id)
+        }}
+        onDragEnd={onDragEnd}
+      >
+        <DotsSixVertical size={16} aria-hidden="true" />
+      </button>
+    )
+  }
+
+  function dropIndexFor(index: number, event: React.DragEvent<HTMLElement>): number {
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const after = event.clientX > bounds.left + bounds.width / 2
+    const rawIndex = index + (after ? 1 : 0)
+    const sourceIndex = group.files.findIndex((file) => file.path === dragging?.path)
+    return sourceIndex !== -1 && sourceIndex < rawIndex ? rawIndex - 1 : rawIndex
+  }
+
+  function handleFileDragOver(index: number, event: React.DragEvent<HTMLElement>): void {
+    if (!isDraggingFromThisGroup) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setInsertionIndex(dropIndexFor(index, event))
+  }
+
+  function handleFileDrop(index: number, event: React.DragEvent<HTMLElement>): void {
+    if (!isDraggingFromThisGroup || !dragging) return
+    event.preventDefault()
+    event.stopPropagation()
+    onReorder(group.id, dragging.path, dropIndexFor(index, event))
+    setInsertionIndex(null)
+  }
 
   function selectButton(path: string, fileName: string): React.JSX.Element {
     const selected = selectedPaths.has(path)
@@ -63,7 +126,25 @@ export function GroupCard({
   }
 
   return (
-    <div className="group-card" data-group-id={group.id}>
+    <div
+      className={`group-card${isGroupDropTarget ? ' group-card-drop-target' : ''}`}
+      data-group-id={group.id}
+      onDragOver={(event) => {
+        if (!isDraggingFromAnotherGroup) return
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'move'
+        setIsGroupDropTarget(true)
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsGroupDropTarget(false)
+      }}
+      onDrop={(event) => {
+        if (!isDraggingFromAnotherGroup || !dragging) return
+        event.preventDefault()
+        onMoveToGroup(dragging.path, group.id)
+        setIsGroupDropTarget(false)
+      }}
+    >
       <div className="group-card-header">
         <button
           className="icon-button"
@@ -96,11 +177,14 @@ export function GroupCard({
         </span>
       </div>
       <div className={`group-card-thumbs${hasActiveSelection ? ' group-card-selecting' : ''}`}>
-        {group.files.slice(0, 6).map((f) => (
+        {group.files.slice(0, 6).map((f, index) => (
           <div
             key={f.path}
-            className={`thumb-wrap${selectedPaths.has(f.path) ? ' thumb-wrap-selected' : ''}`}
+            className={`thumb-wrap${selectedPaths.has(f.path) ? ' thumb-wrap-selected' : ''}${dragging?.path === f.path ? ' thumb-wrap-dragging' : ''}${insertionIndex === index ? ' thumb-wrap-insert-before' : ''}${insertionIndex === group.files.length - 1 && index === group.files.length - 1 ? ' thumb-wrap-insert-after' : ''}`}
+            onDragOver={(event) => handleFileDragOver(index, event)}
+            onDrop={(event) => handleFileDrop(index, event)}
           >
+            {dragHandle(f.path, f.fileName)}
             {selectButton(f.path, f.fileName)}
             <button
               type="button"
@@ -115,8 +199,14 @@ export function GroupCard({
       </div>
       {expanded && (
         <ul className="group-card-file-list">
-          {group.files.map((f) => (
-            <li key={f.path} className="group-card-file-row">
+          {group.files.map((f, index) => (
+            <li
+              key={f.path}
+              className={`group-card-file-row${dragging?.path === f.path ? ' group-card-file-row-dragging' : ''}${insertionIndex === index ? ' group-card-file-row-insert-before' : ''}${insertionIndex === group.files.length - 1 && index === group.files.length - 1 ? ' group-card-file-row-insert-after' : ''}`}
+              onDragOver={(event) => handleFileDragOver(index, event)}
+              onDrop={(event) => handleFileDrop(index, event)}
+            >
+              {dragHandle(f.path, f.fileName)}
               {selectButton(f.path, f.fileName)}
               {renamingPath === f.path ? (
                 <input

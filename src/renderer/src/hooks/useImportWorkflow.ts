@@ -38,6 +38,7 @@ interface ImportWorkflow {
   selectPaths: (paths: string[]) => void
   deleteFiles: (paths: string[]) => void
   moveFiles: (paths: string[], targetGroupId: string) => void
+  reorderFiles: (groupId: string, path: string, targetIndex: number) => void
   createGroupAndMoveFiles: (paths: string[], name?: string) => void
   renameFile: (path: string, fileName: string) => void
 }
@@ -204,6 +205,10 @@ export function useImportWorkflow(): ImportWorkflow {
     dispatch({ type: 'MOVE_FILES', paths, targetGroupId })
   }, [])
 
+  const reorderFiles = useCallback((groupId: string, path: string, targetIndex: number) => {
+    dispatch({ type: 'REORDER_FILES', groupId, path, targetIndex })
+  }, [])
+
   const createGroupAndMoveFiles = useCallback((paths: string[], name?: string) => {
     const groupId = `group-new-${crypto.randomUUID()}`
     dispatch({ type: 'CREATE_GROUP', groupId, name })
@@ -235,6 +240,7 @@ export function useImportWorkflow(): ImportWorkflow {
     selectPaths,
     deleteFiles,
     moveFiles,
+    reorderFiles,
     createGroupAndMoveFiles,
     renameFile
   }

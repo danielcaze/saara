@@ -1,5 +1,5 @@
 // src/renderer/src/screens/HomeScreen.tsx
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   FolderOpen,
@@ -46,6 +46,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     selectPaths,
     deleteFiles,
     moveFiles,
+    reorderFiles,
     createGroupAndMoveFiles,
     startCopy,
     openViewer,
@@ -55,8 +56,10 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     toggleSelect
   } = workflow
   const [activeSessionModal, setActiveSessionModal] = useState<'delete' | 'move' | null>(null)
-  const [focusedGroupId, setFocusedGroupId] = useState<string | null>(null)
   const [copiedGroupFolderId, setCopiedGroupFolderId] = useState<string | null>(null)
+  const [dragging, setDragging] = useState<{ path: string; groupId: string } | null>(null)
+  const homeContentRef = useRef<HTMLDivElement>(null)
+  const dragPointerY = useRef<number | null>(null)
 
   const totalFiles = state.groups.reduce((sum, g) => sum + g.files.length, 0)
   const selectedPaths = Array.from(state.selectedPaths)
@@ -100,6 +103,8 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
       // focus is inside one, and every file across every group otherwise —
       // so it does what you'd expect whether you're scoped into a folder or
       // looking at the whole session.
+      const focusedGroupId =
+        document.activeElement?.closest<HTMLElement>('[data-group-id]')?.dataset.groupId
       const focusedGroup = focusedGroupId ? state.groups.find((g) => g.id === focusedGroupId) : null
       const paths = focusedGroup
         ? focusedGroup.files.map((f) => f.path)
@@ -109,7 +114,41 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [subView, state.groups, selectPaths, focusedGroupId])
+  }, [subView, state.groups, selectPaths])
+
+  useEffect(() => {
+    if (!dragging) return
+
+    let frameId = 0
+    const edgeSize = 72
+    const maxStep = 18
+
+    function autoScroll(): void {
+      const container = homeContentRef.current
+      const pointerY = dragPointerY.current
+      if (container && pointerY !== null) {
+        const bounds = container.getBoundingClientRect()
+        const topDistance = pointerY - bounds.top
+        const bottomDistance = bounds.bottom - pointerY
+        const topStep =
+          topDistance >= 0 && topDistance < edgeSize ? -maxStep * (1 - topDistance / edgeSize) : 0
+        const bottomStep =
+          bottomDistance >= 0 && bottomDistance < edgeSize
+            ? maxStep * (1 - bottomDistance / edgeSize)
+            : 0
+        container.scrollTop += topStep || bottomStep
+      }
+      frameId = requestAnimationFrame(autoScroll)
+    }
+
+    frameId = requestAnimationFrame(autoScroll)
+    return () => cancelAnimationFrame(frameId)
+  }, [dragging])
+
+  function endDrag(): void {
+    dragPointerY.current = null
+    setDragging(null)
+  }
 
   const destinationReady = isDrive ? state.driveStatus.connected : !!state.destinationPath
 
@@ -183,7 +222,13 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
         />
       </div>
 
-      <div className="home-content">
+      <div
+        ref={homeContentRef}
+        className="home-content"
+        onDragOver={(event) => {
+          if (dragging) dragPointerY.current = event.clientY
+        }}
+      >
         <AnimatePresence mode="wait">
           {subView === 'empty' && (
             <motion.p
@@ -233,10 +278,6 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              onClick={(e) => {
-                const card = (e.target as HTMLElement).closest<HTMLElement>('[data-group-id]')
-                setFocusedGroupId(card?.dataset.groupId ?? null)
-              }}
             >
               {state.groups.map((g) => (
                 <GroupCard
@@ -247,8 +288,44 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
                   onRenameFile={renameFile}
                   onToggleSelect={toggleSelect}
                   onOpenViewer={openViewer}
+                  dragging={dragging}
+                  onDragStart={(path, groupId) => setDragging({ path, groupId })}
+                  onDragEnd={endDrag}
+                  onMoveToGroup={(path, groupId) => {
+                    moveFiles([path], groupId)
+                    endDrag()
+                  }}
+                  onReorder={(groupId, path, targetIndex) => {
+                    reorderFiles(groupId, path, targetIndex)
+                    endDrag()
+                  }}
                 />
               ))}
+              {dragging && (
+                <motion.div
+                  className="new-group-drop-tile"
+                  initial={{ opacity: 0, scale: 0.98, y: 6 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.98, y: 6 }}
+                  transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+                  onDragOver={(event) => {
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'move'
+                    event.currentTarget.classList.add('new-group-drop-tile-active')
+                  }}
+                  onDragLeave={(event) =>
+                    event.currentTarget.classList.remove('new-group-drop-tile-active')
+                  }
+                  onDrop={(event) => {
+                    event.preventDefault()
+                    createGroupAndMoveFiles([dragging.path])
+                    endDrag()
+                  }}
+                >
+                  <FolderPlus size={22} aria-hidden="true" />
+                  <span>New group</span>
+                </motion.div>
+              )}
             </motion.div>
           )}
 
