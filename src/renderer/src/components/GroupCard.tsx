@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { CaretRight, CaretDown, CheckSquare, Square } from '@phosphor-icons/react'
+import { CaretRight, CaretDown, CheckSquare, PencilSimple, Square } from '@phosphor-icons/react'
 
 import type { PhotoGroup } from '../../../shared/types'
 
@@ -9,6 +9,7 @@ interface Props {
   group: PhotoGroup
   selectedPaths: Set<string>
   onRename: (name: string) => void
+  onRenameFile: (path: string, fileName: string) => void
   onToggleSelect: (path: string) => void
   onOpenViewer: (path: string) => void
 }
@@ -17,10 +18,13 @@ export function GroupCard({
   group,
   selectedPaths,
   onRename,
+  onRenameFile,
   onToggleSelect,
   onOpenViewer
 }: Props): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
+  const [renamingPath, setRenamingPath] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
   const renameInputId = useId()
   const hasActiveSelection = selectedPaths.size > 0
 
@@ -45,6 +49,17 @@ export function GroupCard({
         )}
       </button>
     )
+  }
+
+  function startFileRename(path: string, fileName: string): void {
+    setRenameValue(fileName)
+    setRenamingPath(path)
+  }
+
+  function commitFileRename(path: string): void {
+    const trimmed = renameValue.trim()
+    if (trimmed) onRenameFile(path, trimmed)
+    setRenamingPath(null)
   }
 
   return (
@@ -103,12 +118,35 @@ export function GroupCard({
           {group.files.map((f) => (
             <li key={f.path} className="group-card-file-row">
               {selectButton(f.path, f.fileName)}
+              {renamingPath === f.path ? (
+                <input
+                  className="field group-card-file-rename"
+                  autoFocus
+                  aria-label={`Rename ${f.fileName}`}
+                  value={renameValue}
+                  onChange={(event) => setRenameValue(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') commitFileRename(f.path)
+                    if (event.key === 'Escape') setRenamingPath(null)
+                  }}
+                  onBlur={() => commitFileRename(f.path)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="group-card-file-name"
+                  onClick={() => onOpenViewer(f.path)}
+                >
+                  {f.fileName} {f.metadataError ? `(error: ${f.metadataError})` : ''}
+                </button>
+              )}
               <button
                 type="button"
-                className="group-card-file-name"
-                onClick={() => onOpenViewer(f.path)}
+                className="icon-button"
+                aria-label={`Rename ${f.fileName}`}
+                onClick={() => startFileRename(f.path, f.fileName)}
               >
-                {f.fileName} {f.metadataError ? `(error: ${f.metadataError})` : ''}
+                <PencilSimple size={16} aria-hidden="true" />
               </button>
             </li>
           ))}

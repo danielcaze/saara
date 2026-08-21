@@ -1,4 +1,5 @@
 // src/renderer/src/screens/HomeScreen.tsx
+import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   FolderOpen,
@@ -6,10 +7,15 @@ import {
   Gear,
   CheckCircle,
   WarningCircle,
-  GoogleDriveLogo
+  GoogleDriveLogo,
+  FolderSimple,
+  Trash,
+  X
 } from '@phosphor-icons/react'
+import { DeleteConfirmModal } from '../components/DeleteConfirmModal'
 import { Dropzone } from '../components/Dropzone'
 import { GroupCard } from '../components/GroupCard'
+import { MoveGroupModal } from '../components/MoveGroupModal'
 import { Lightbox } from '../components/Lightbox'
 import { ProgressBar } from '../components/ProgressBar'
 import type { useImportWorkflow } from '../hooks/useImportWorkflow'
@@ -35,19 +41,23 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     toggleDestinationType,
     connectDrive,
     renameGroup,
+    renameFile,
+    clearSelection,
+    deleteFiles,
+    moveFiles,
+    createGroupAndMoveFiles,
     startCopy,
     openViewer,
     closeViewer,
     viewerNext,
     viewerPrev,
-    toggleSelect,
-    deleteFiles,
-    moveFiles,
-    createGroupAndMoveFiles,
-    renameFile
+    toggleSelect
   } = workflow
+  const [activeSessionModal, setActiveSessionModal] = useState<'delete' | 'move' | null>(null)
 
   const totalFiles = state.groups.reduce((sum, g) => sum + g.files.length, 0)
+  const selectedPaths = Array.from(state.selectedPaths)
+  const hasSelection = selectedPaths.length > 0
   const subView = state.copySummary
     ? 'done'
     : state.copying
@@ -191,6 +201,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
                   group={g}
                   selectedPaths={state.selectedPaths}
                   onRename={(name) => renameGroup(g.id, name)}
+                  onRenameFile={renameFile}
                   onToggleSelect={toggleSelect}
                   onOpenViewer={openViewer}
                 />
@@ -281,20 +292,63 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
 
       {subView === 'reviewing' && (
         <div className="sticky-footer">
-          <span className="tabular-nums field-value">
-            {state.groups.length} groups, {totalFiles} files
-          </span>
-          {!destinationReady && (
-            <span className="field-error">
-              {isDrive
-                ? 'Connect Google Drive to continue'
-                : 'Select a destination folder to continue'}
-            </span>
-          )}
-          {state.copyError && <span className="field-error">{state.copyError}</span>}
-          <button className="primary" disabled={!destinationReady} onClick={startCopy}>
-            {isDrive ? 'Confirm & Upload' : 'Confirm & Copy'}
-          </button>
+          <AnimatePresence mode="wait" initial={false}>
+            {hasSelection ? (
+              <motion.div
+                key="selection-actions"
+                className="sticky-footer-content"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
+              >
+                <span className="tabular-nums field-value">{selectedPaths.length} selected</span>
+                <div className="selection-actions">
+                  <button
+                    type="button"
+                    className="modal-secondary"
+                    onClick={() => setActiveSessionModal('delete')}
+                  >
+                    <Trash size={16} aria-hidden="true" /> Delete
+                  </button>
+                  <button
+                    type="button"
+                    className="modal-secondary"
+                    onClick={() => setActiveSessionModal('move')}
+                  >
+                    <FolderSimple size={16} aria-hidden="true" /> Move
+                  </button>
+                  <button type="button" className="modal-secondary" onClick={clearSelection}>
+                    <X size={16} aria-hidden="true" /> Clear selection
+                  </button>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="copy-actions"
+                className="sticky-footer-content"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
+              >
+                <span className="tabular-nums field-value">
+                  {state.groups.length} groups, {totalFiles} files
+                </span>
+                {!destinationReady && (
+                  <span className="field-error">
+                    {isDrive
+                      ? 'Connect Google Drive to continue'
+                      : 'Select a destination folder to continue'}
+                  </span>
+                )}
+                {state.copyError && <span className="field-error">{state.copyError}</span>}
+                <button className="primary" disabled={!destinationReady} onClick={startCopy}>
+                  {isDrive ? 'Confirm & Upload' : 'Confirm & Copy'}
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
 
@@ -311,6 +365,33 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           onMove={moveFiles}
           onCreateGroupAndMove={createGroupAndMoveFiles}
           onRename={renameFile}
+        />
+      )}
+
+      {activeSessionModal === 'delete' && (
+        <DeleteConfirmModal
+          paths={selectedPaths}
+          onConfirm={() => {
+            deleteFiles(selectedPaths)
+            setActiveSessionModal(null)
+          }}
+          onCancel={() => setActiveSessionModal(null)}
+        />
+      )}
+
+      {activeSessionModal === 'move' && (
+        <MoveGroupModal
+          groups={state.groups}
+          paths={selectedPaths}
+          onMove={(targetGroupId) => {
+            moveFiles(selectedPaths, targetGroupId)
+            setActiveSessionModal(null)
+          }}
+          onCreateGroupAndMove={() => {
+            createGroupAndMoveFiles(selectedPaths)
+            setActiveSessionModal(null)
+          }}
+          onCancel={() => setActiveSessionModal(null)}
         />
       )}
     </div>
