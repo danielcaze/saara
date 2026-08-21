@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { useCallback, useEffect, useState } from 'react'
+import { AnimatePresence } from 'motion/react'
 import { useImportWorkflow } from './hooks/useImportWorkflow'
 import { HomeScreen } from './screens/HomeScreen'
-import { SettingsScreen } from './screens/SettingsScreen'
+import { SettingsDialog } from './components/SettingsDialog'
 
 export default function App(): React.JSX.Element {
   const workflow = useImportWorkflow()
-  const [screen, setScreen] = useState<'home' | 'settings'>('home')
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const openSettings = useCallback(() => setIsSettingsOpen(true), [])
+  const closeSettings = useCallback(() => setIsSettingsOpen(false), [])
 
   useEffect(() => {
     function preventDefault(e: Event): void {
@@ -22,30 +24,9 @@ export default function App(): React.JSX.Element {
 
   return (
     <div className="app-shell">
-      <AnimatePresence mode="wait">
-        {screen === 'home' ? (
-          <motion.div
-            key="home"
-            className="screen-flex-wrapper"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-          >
-            <HomeScreen workflow={workflow} onOpenSettings={() => setScreen('settings')} />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="settings"
-            className="screen-flex-wrapper"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-          >
-            <SettingsScreen workflow={workflow} onBack={() => setScreen('home')} />
-          </motion.div>
-        )}
+      <HomeScreen workflow={workflow} onOpenSettings={openSettings} />
+      <AnimatePresence>
+        {isSettingsOpen && <SettingsDialog workflow={workflow} onClose={closeSettings} />}
       </AnimatePresence>
     </div>
   )
