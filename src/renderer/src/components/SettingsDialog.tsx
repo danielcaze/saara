@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { ArrowSquareOut, X } from '@phosphor-icons/react'
 import { motion, useReducedMotion } from 'motion/react'
 
-import { validateThresholdHours } from '../../../shared/schemas'
 import type { useImportWorkflow } from '../hooks/useImportWorkflow'
+import { useThresholdSettings } from '../hooks/useThresholdSettings'
 
 interface Props {
   workflow: ReturnType<typeof useImportWorkflow>
@@ -18,72 +18,84 @@ function focusableElements(container: HTMLElement): HTMLElement[] {
   )
 }
 
+function closeOnEscape(event: KeyboardEvent, onClose: () => void): void {
+  if (event.key === 'Escape') onClose()
+}
+
+function moveFocusToEnd(event: KeyboardEvent, first: HTMLElement, last: HTMLElement): boolean {
+  if (!event.shiftKey || document.activeElement !== first) return false
+  event.preventDefault()
+  last.focus()
+  return true
+}
+
+function moveFocusToStart(event: KeyboardEvent, last: HTMLElement, first: HTMLElement): void {
+  if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+function focusAtBoundary(event: KeyboardEvent, focusable: HTMLElement[]): void {
+  const first = focusable[0]
+  if (!first) return
+  const last = focusable[focusable.length - 1] ?? first
+  if (!moveFocusToEnd(event, first, last)) moveFocusToStart(event, last, first)
+}
+
+function keepFocusInDialog(event: KeyboardEvent, container: HTMLElement | null): void {
+  if (event.key !== 'Tab') return
+  if (!container) return
+  focusAtBoundary(event, focusableElements(container))
+}
+
+const reducedDialogAnimation = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
+  transition: { duration: 0.1 }
+}
+
+const standardDialogAnimation = {
+  initial: { opacity: 0, scale: 0.98, y: 8 },
+  animate: { opacity: 1, scale: 1, y: 0 },
+  exit: { opacity: 0, scale: 0.98, y: 8 },
+  transition: { type: 'spring' as const, bounce: 0, duration: 0.35 }
+}
+
+function dialogAnimation(reduceMotion: boolean) {
+  return reduceMotion ? reducedDialogAnimation : standardDialogAnimation
+}
+
+function scrimTransition(reduceMotion: boolean): { duration: number } {
+  return { duration: reduceMotion ? 0.1 : 0.15 }
+}
+
 export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element {
-  const [rawValue, setRawValue] = useState(String(workflow.state.thresholdHours))
-  const [error, setError] = useState<string | null>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
   const reduceMotion = useReducedMotion()
+  const shouldReduceMotion = reduceMotion ?? false
+  const { rawValue, error, handleChange, handleSave } = useThresholdSettings(workflow, onClose)
+  const animation = dialogAnimation(shouldReduceMotion)
 
   useEffect(() => {
     previouslyFocused.current = document.activeElement as HTMLElement | null
     inputRef.current?.focus()
 
-    function handleKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') {
-        onClose()
-        return
-      }
-      if (event.key !== 'Tab' || !dialogRef.current) return
+    const handleEscape = (event: KeyboardEvent): void => closeOnEscape(event, onClose)
+    const handleFocusTrap = (event: KeyboardEvent): void =>
+      keepFocusInDialog(event, dialogRef.current)
 
-      const focusable = focusableElements(dialogRef.current)
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-      if (!first || !last) return
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handleEscape)
+    window.addEventListener('keydown', handleFocusTrap)
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keydown', handleEscape)
+      window.removeEventListener('keydown', handleFocusTrap)
       previouslyFocused.current?.focus?.()
     }
   }, [onClose])
-
-  function handleChange(rawInput: string): void {
-    const value = rawInput.slice(0, 3)
-    setRawValue(value)
-    const parsed = Number(value)
-    if (value.trim() === '' || Number.isNaN(parsed)) {
-      setError('Enter a number.')
-      return
-    }
-    const result = validateThresholdHours(parsed)
-    setError(result.ok ? null : result.message)
-  }
-
-  async function handleSave(): Promise<void> {
-    const parsed = Number(rawValue)
-    const result =
-      rawValue.trim() === '' || Number.isNaN(parsed)
-        ? { ok: false as const, message: 'Enter a number.' }
-        : validateThresholdHours(parsed)
-    if (!result.ok) {
-      setError(result.message)
-      return
-    }
-    await window.saaraAPI.setSettings({ thresholdHours: parsed })
-    await workflow.recluster(parsed)
-    onClose()
-  }
 
   return (
     <motion.div
@@ -92,7 +104,7 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: reduceMotion ? 0.1 : 0.15 }}
+      transition={scrimTransition(shouldReduceMotion)}
       onClick={onClose}
     >
       <motion.div
@@ -101,12 +113,10 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-dialog-title"
-        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98, y: 8 }}
-        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
-        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98, y: 8 }}
-        transition={
-          reduceMotion ? { duration: 0.1 } : { type: 'spring', bounce: 0, duration: 0.35 }
-        }
+        initial={animation.initial}
+        animate={animation.animate}
+        exit={animation.exit}
+        transition={animation.transition}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="settings-dialog-header">

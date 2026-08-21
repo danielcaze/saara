@@ -99,13 +99,6 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.field-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-
 .field-value {
   color: var(--color-text-muted);
 }
@@ -260,13 +253,6 @@ body,
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.screen-flex-wrapper {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
 }
 
 .home-screen {
