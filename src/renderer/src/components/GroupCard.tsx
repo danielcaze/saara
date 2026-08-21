@@ -63,7 +63,7 @@ export function GroupCard({
   }
 
   return (
-    <div className="group-card">
+    <div className="group-card" data-group-id={group.id}>
       <div className="group-card-header">
         <button
           className="icon-button"
@@ -142,7 +142,7 @@ export function GroupCard({
               )}
               <button
                 type="button"
-                className="icon-button"
+                className="icon-button group-card-file-rename-btn"
                 aria-label={`Rename ${f.fileName}`}
                 onClick={() => startFileRename(f.path, f.fileName)}
               >
