@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
 import { FilmSlate, ImageBroken } from '@phosphor-icons/react'
+
 import type { MediaType } from '../../../shared/types'
+
+import { useThumbnailDataUrl } from '../hooks/useThumbnailDataUrl'
 
 interface Props {
   path: string
@@ -8,23 +10,7 @@ interface Props {
 }
 
 export function Thumbnail({ path, mediaType }: Props): React.JSX.Element {
-  const [dataUrl, setDataUrl] = useState<string | null>(null)
-  const [failed, setFailed] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    if (mediaType === 'video') {
-      return
-    }
-    window.saaraAPI.getThumbnail(path, mediaType).then((result) => {
-      if (cancelled) return
-      if (result) setDataUrl(result.dataUrl)
-      else setFailed(true)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [path, mediaType])
+  const { dataUrl, failed } = useThumbnailDataUrl(path, mediaType)
 
   if (mediaType === 'video')
     return (
