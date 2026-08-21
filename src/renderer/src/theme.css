@@ -589,3 +589,100 @@ input[type='number'] {
 .lightbox-nav-next {
   right: var(--space-4);
 }
+
+/* --- Session edit modal additions below --- */
+
+.session-modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgba(5, 5, 5, 0.72);
+}
+
+.session-modal {
+  width: min(100%, 440px);
+  max-height: min(100%, 560px);
+  overflow-y: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+}
+
+.session-modal h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.modal-copy {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+button.modal-secondary {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+button.modal-secondary:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-hover);
+}
+
+.modal-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+button.modal-group-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text);
+  padding: var(--space-2);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+button.modal-group-row:hover {
+  border-color: var(--color-border);
+  background: var(--color-accent-softer);
+}
+
+button.modal-new-group {
+  margin-top: var(--space-1);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+button.modal-new-group:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-hover);
+}
