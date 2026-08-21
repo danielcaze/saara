@@ -1,16 +1,51 @@
 import { useId, useState } from 'react'
-import { CaretRight, CaretDown } from '@phosphor-icons/react'
+import { CaretRight, CaretDown, CheckSquare, Square } from '@phosphor-icons/react'
+
 import type { PhotoGroup } from '../../../shared/types'
+
 import { Thumbnail } from './Thumbnail'
 
 interface Props {
   group: PhotoGroup
+  selectedPaths: Set<string>
   onRename: (name: string) => void
+  onToggleSelect: (path: string) => void
+  onOpenViewer: (path: string) => void
 }
 
-export function GroupCard({ group, onRename }: Props): React.JSX.Element {
+export function GroupCard({
+  group,
+  selectedPaths,
+  onRename,
+  onToggleSelect,
+  onOpenViewer
+}: Props): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const renameInputId = useId()
+  const hasActiveSelection = selectedPaths.size > 0
+
+  function selectButton(path: string, fileName: string): React.JSX.Element {
+    const selected = selectedPaths.has(path)
+
+    return (
+      <button
+        type="button"
+        className="thumb-select"
+        aria-pressed={selected}
+        aria-label={selected ? `Deselect ${fileName}` : `Select ${fileName}`}
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleSelect(path)
+        }}
+      >
+        {selected ? (
+          <CheckSquare size={16} weight="fill" aria-hidden="true" />
+        ) : (
+          <Square size={16} aria-hidden="true" />
+        )}
+      </button>
+    )
+  }
 
   return (
     <div className="group-card">
@@ -45,16 +80,36 @@ export function GroupCard({ group, onRename }: Props): React.JSX.Element {
               : `${group.startDate?.slice(0, 10)} – ${group.endDate?.slice(0, 10)}`}
         </span>
       </div>
-      <div className="group-card-thumbs">
+      <div className={`group-card-thumbs${hasActiveSelection ? ' group-card-selecting' : ''}`}>
         {group.files.slice(0, 6).map((f) => (
-          <Thumbnail key={f.path} path={f.path} mediaType={f.mediaType} />
+          <div
+            key={f.path}
+            className={`thumb-wrap${selectedPaths.has(f.path) ? ' thumb-wrap-selected' : ''}`}
+          >
+            {selectButton(f.path, f.fileName)}
+            <button
+              type="button"
+              className="thumb-open"
+              onClick={() => onOpenViewer(f.path)}
+              aria-label={`Open ${f.fileName}`}
+            >
+              <Thumbnail path={f.path} mediaType={f.mediaType} />
+            </button>
+          </div>
         ))}
       </div>
       {expanded && (
-        <ul>
+        <ul className="group-card-file-list">
           {group.files.map((f) => (
-            <li key={f.path}>
-              {f.fileName} {f.metadataError ? `(error: ${f.metadataError})` : ''}
+            <li key={f.path} className="group-card-file-row">
+              {selectButton(f.path, f.fileName)}
+              <button
+                type="button"
+                className="group-card-file-name"
+                onClick={() => onOpenViewer(f.path)}
+              >
+                {f.fileName} {f.metadataError ? `(error: ${f.metadataError})` : ''}
+              </button>
             </li>
           ))}
         </ul>
