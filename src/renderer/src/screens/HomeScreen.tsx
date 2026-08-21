@@ -10,6 +10,7 @@ import {
 } from '@phosphor-icons/react'
 import { Dropzone } from '../components/Dropzone'
 import { GroupCard } from '../components/GroupCard'
+import { Lightbox } from '../components/Lightbox'
 import { ProgressBar } from '../components/ProgressBar'
 import type { useImportWorkflow } from '../hooks/useImportWorkflow'
 
@@ -34,7 +35,16 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     toggleDestinationType,
     connectDrive,
     renameGroup,
-    startCopy
+    startCopy,
+    openViewer,
+    closeViewer,
+    viewerNext,
+    viewerPrev,
+    toggleSelect,
+    deleteFiles,
+    moveFiles,
+    createGroupAndMoveFiles,
+    renameFile
   } = workflow
 
   const totalFiles = state.groups.reduce((sum, g) => sum + g.files.length, 0)
@@ -176,7 +186,14 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
               transition={{ duration: 0.15 }}
             >
               {state.groups.map((g) => (
-                <GroupCard key={g.id} group={g} onRename={(name) => renameGroup(g.id, name)} />
+                <GroupCard
+                  key={g.id}
+                  group={g}
+                  selectedPaths={state.selectedPaths}
+                  onRename={(name) => renameGroup(g.id, name)}
+                  onToggleSelect={toggleSelect}
+                  onOpenViewer={openViewer}
+                />
               ))}
             </motion.div>
           )}
@@ -279,6 +296,22 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
             {isDrive ? 'Confirm & Upload' : 'Confirm & Copy'}
           </button>
         </div>
+      )}
+
+      {state.viewerIndex !== null && (
+        <Lightbox
+          groups={state.groups}
+          index={state.viewerIndex}
+          selectedPaths={state.selectedPaths}
+          onClose={closeViewer}
+          onPrev={viewerPrev}
+          onNext={viewerNext}
+          onToggleSelect={toggleSelect}
+          onDelete={deleteFiles}
+          onMove={moveFiles}
+          onCreateGroupAndMove={createGroupAndMoveFiles}
+          onRename={renameFile}
+        />
       )}
     </div>
   )
