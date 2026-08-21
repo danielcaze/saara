@@ -1,5 +1,5 @@
 // src/renderer/src/screens/HomeScreen.tsx
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   FolderOpen,
@@ -43,6 +43,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     renameGroup,
     renameFile,
     clearSelection,
+    selectPaths,
     deleteFiles,
     moveFiles,
     createGroupAndMoveFiles,
@@ -54,6 +55,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     toggleSelect
   } = workflow
   const [activeSessionModal, setActiveSessionModal] = useState<'delete' | 'move' | null>(null)
+  const [focusedGroupId, setFocusedGroupId] = useState<string | null>(null)
 
   const totalFiles = state.groups.reduce((sum, g) => sum + g.files.length, 0)
   const selectedPaths = Array.from(state.selectedPaths)
@@ -71,6 +73,30 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
             : 'empty'
   const boxesDisabled = state.copying || !!state.analyzeProgress
   const isDrive = state.destinationType === 'drive'
+
+  useEffect(() => {
+    if (subView !== 'reviewing') return
+
+    function handleKeyDown(e: KeyboardEvent): void {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'a') return
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+
+      e.preventDefault()
+      // Ctrl/Cmd+A selects everything visible in the current group when
+      // focus is inside one, and every file across every group otherwise —
+      // so it does what you'd expect whether you're scoped into a folder or
+      // looking at the whole session.
+      const focusedGroup = focusedGroupId ? state.groups.find((g) => g.id === focusedGroupId) : null
+      const paths = focusedGroup
+        ? focusedGroup.files.map((f) => f.path)
+        : state.groups.flatMap((g) => g.files.map((f) => f.path))
+      selectPaths(paths)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [subView, state.groups, selectPaths, focusedGroupId])
 
   const destinationReady = isDrive ? state.driveStatus.connected : !!state.destinationPath
 
@@ -194,6 +220,10 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
+              onClick={(e) => {
+                const card = (e.target as HTMLElement).closest<HTMLElement>('[data-group-id]')
+                setFocusedGroupId(card?.dataset.groupId ?? null)
+              }}
             >
               {state.groups.map((g) => (
                 <GroupCard
@@ -364,6 +394,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           onDelete={deleteFiles}
           onMove={moveFiles}
           onCreateGroupAndMove={createGroupAndMoveFiles}
+          onRenameGroup={renameGroup}
           onRename={renameFile}
         />
       )}
@@ -387,10 +418,11 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
             moveFiles(selectedPaths, targetGroupId)
             setActiveSessionModal(null)
           }}
-          onCreateGroupAndMove={() => {
-            createGroupAndMoveFiles(selectedPaths)
+          onCreateGroupAndMove={(name) => {
+            createGroupAndMoveFiles(selectedPaths, name)
             setActiveSessionModal(null)
           }}
+          onRenameGroup={renameGroup}
           onCancel={() => setActiveSessionModal(null)}
         />
       )}

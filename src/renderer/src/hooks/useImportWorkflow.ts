@@ -35,9 +35,10 @@ interface ImportWorkflow {
   viewerPrev: () => void
   toggleSelect: (path: string) => void
   clearSelection: () => void
+  selectPaths: (paths: string[]) => void
   deleteFiles: (paths: string[]) => void
   moveFiles: (paths: string[], targetGroupId: string) => void
-  createGroupAndMoveFiles: (paths: string[]) => void
+  createGroupAndMoveFiles: (paths: string[], name?: string) => void
   renameFile: (path: string, fileName: string) => void
 }
 
@@ -191,6 +192,10 @@ export function useImportWorkflow(): ImportWorkflow {
     dispatch({ type: 'CLEAR_SELECTION' })
   }, [])
 
+  const selectPaths = useCallback((paths: string[]) => {
+    dispatch({ type: 'SELECT_PATHS', paths })
+  }, [])
+
   const deleteFiles = useCallback((paths: string[]) => {
     dispatch({ type: 'DELETE_FILES', paths })
   }, [])
@@ -199,9 +204,9 @@ export function useImportWorkflow(): ImportWorkflow {
     dispatch({ type: 'MOVE_FILES', paths, targetGroupId })
   }, [])
 
-  const createGroupAndMoveFiles = useCallback((paths: string[]) => {
+  const createGroupAndMoveFiles = useCallback((paths: string[], name?: string) => {
     const groupId = `group-new-${crypto.randomUUID()}`
-    dispatch({ type: 'CREATE_GROUP', groupId })
+    dispatch({ type: 'CREATE_GROUP', groupId, name })
     dispatch({ type: 'MOVE_FILES', paths, targetGroupId: groupId })
   }, [])
 
@@ -227,6 +232,7 @@ export function useImportWorkflow(): ImportWorkflow {
     viewerPrev,
     toggleSelect,
     clearSelection,
+    selectPaths,
     deleteFiles,
     moveFiles,
     createGroupAndMoveFiles,

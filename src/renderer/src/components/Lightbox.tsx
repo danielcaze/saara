@@ -27,7 +27,8 @@ interface Props {
   onToggleSelect: (path: string) => void
   onDelete: (paths: string[]) => void
   onMove: (paths: string[], targetGroupId: string) => void
-  onCreateGroupAndMove: (paths: string[]) => void
+  onCreateGroupAndMove: (paths: string[], name?: string) => void
+  onRenameGroup: (groupId: string, name: string) => void
   onRename: (path: string, fileName: string) => void
 }
 
@@ -42,6 +43,7 @@ export function Lightbox({
   onDelete,
   onMove,
   onCreateGroupAndMove,
+  onRenameGroup,
   onRename
 }: Props): React.JSX.Element | null {
   const flat = flattenGroupFiles(groups)
@@ -152,6 +154,7 @@ export function Lightbox({
         <button className="icon-button" onClick={onClose} aria-label="Close">
           <X size={18} aria-hidden="true" />
         </button>
+        <span className="lightbox-filename">{current.file.fileName}</span>
         <span className="tabular-nums field-value">
           {index + 1} / {flat.length}
         </span>
@@ -254,10 +257,11 @@ export function Lightbox({
             setShowMoveModal(false)
             onMove([currentPath], targetGroupId)
           }}
-          onCreateGroupAndMove={() => {
+          onCreateGroupAndMove={(name) => {
             setShowMoveModal(false)
-            onCreateGroupAndMove([currentPath])
+            onCreateGroupAndMove([currentPath], name)
           }}
+          onRenameGroup={onRenameGroup}
           onCancel={() => setShowMoveModal(false)}
         />
       )}

@@ -77,8 +77,9 @@ export type Action =
   | { type: 'SET_VIEWER_INDEX'; index: number }
   | { type: 'TOGGLE_SELECT'; path: string }
   | { type: 'CLEAR_SELECTION' }
+  | { type: 'SELECT_PATHS'; paths: string[] }
   | { type: 'DELETE_FILES'; paths: string[] }
-  | { type: 'CREATE_GROUP'; groupId: string }
+  | { type: 'CREATE_GROUP'; groupId: string; name?: string }
   | { type: 'MOVE_FILES'; paths: string[]; targetGroupId: string }
   | { type: 'RENAME_FILE'; path: string; fileName: string }
 
@@ -268,6 +269,12 @@ export function reducer(state: State, action: Action): State {
     }
     case 'CLEAR_SELECTION':
       return { ...state, selectedPaths: new Set() }
+    case 'SELECT_PATHS':
+      // Additive: a per-group Ctrl+A must not clobber a selection made in a
+      // different group moments earlier — only the whole-session Ctrl+A
+      // case (paths = every file) needs to "select everything," and union
+      // already gets that for free.
+      return { ...state, selectedPaths: new Set([...state.selectedPaths, ...action.paths]) }
     case 'DELETE_FILES': {
       const paths = new Set(action.paths)
       const prevFlat = flattenGroupFiles(state.groups)
@@ -287,7 +294,7 @@ export function reducer(state: State, action: Action): State {
           ...state.groups,
           {
             id: action.groupId,
-            name: 'New group',
+            name: action.name?.trim() || 'New group',
             files: [],
             // An empty group has no dated files, so it must read as a
             // no-date group — leaving isNoDateGroup false here (with
@@ -323,12 +330,17 @@ export function reducer(state: State, action: Action): State {
           })
           .filter((g) => g.files.length > 0)
       )
-      const { viewerIndex, selectedPaths } = reconcileAfterGroupsChange(
+      const { viewerIndex, selectedPaths: reconciled } = reconcileAfterGroupsChange(
         prevFlat,
         state.viewerIndex,
         state.selectedPaths,
         groups
       )
+      // A moved file still exists afterward, so reconcileAfterGroupsChange
+      // (which only drops paths that no longer exist) would otherwise leave
+      // it selected in its new group — deselect explicitly so a move always
+      // clears the selection it acted on.
+      const selectedPaths = new Set([...reconciled].filter((p) => !paths.has(p)))
       return { ...state, groups, viewerIndex, selectedPaths }
     }
     case 'RENAME_FILE':
