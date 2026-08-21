@@ -55,3 +55,19 @@ Installed as a devDependency (`npm run smell` runs dead-code + dupes + health --
 - Do not edit: `out/`, `release/`, `.git/` — build/packaging output, never source.
 - Always ask before: `npm run dev` (opens a real Electron window) or `npm run build:win` (heavy build) if the user hasn't explicitly requested it in the current task.
 - Preferred style: English for all UI-facing strings and code/comments/commit messages (as of V1.1 — the app was Portuguese-only in V1, reversed when the project moved toward open source; see `docs/superpowers/specs/2026-08-12-saara-v1.1-home-redesign-design.md`). No `Co-Authored-By` trailer on commits.
+- For any UI, motion, or interaction work, use the `apple-design` skill for visual/motion design guidance before writing the implementation.
+- Before starting new feature work, check previous development first: read the existing code in the area being touched and recent git history/PRs for it, so new work doesn't contradict, duplicate, or regress something already decided. Don't design in a vacuum.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues (`danielcaze/saara`), managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), unchanged. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout (`CONTEXT.md` + `docs/adr/` at repo root, created lazily as decisions accumulate). See `docs/agents/domain.md`.
