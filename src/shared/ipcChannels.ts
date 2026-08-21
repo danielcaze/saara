@@ -4,6 +4,7 @@ export const IPC = {
   ANALYZE_PROGRESS: 'import:analyze:progress',
   RECOMPUTE_CLUSTERS: 'cluster:recompute',
   GET_THUMBNAIL: 'thumbnail:get',
+  GET_LIGHTBOX_PREVIEW: 'thumbnail:getLightboxPreview',
   COPY_START: 'copy:start',
   COPY_PROGRESS: 'copy:progress',
   OPEN_PATH: 'shell:openPath',

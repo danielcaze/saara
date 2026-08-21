@@ -19,6 +19,8 @@ export const getThumbnailRequestSchema = z.object({
   mediaType: z.enum(['photo', 'raw', 'video', 'unsupported'])
 })
 
+export const getLightboxPreviewRequestSchema = getThumbnailRequestSchema
+
 const copyPlanFileSchema = z.object({
   sourcePath: z.string().min(1),
   fileName: z.string().min(1)
