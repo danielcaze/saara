@@ -20,13 +20,19 @@ function createFakeApi(): {
   const api: DriveApi = {
     async findFolder(_parentId, name) {
       const id = folders.get(name)
-      return id ? { id, name, webViewLink: null } : null
+      return id ? { id, name, webViewLink: `https://drive.test/${id}` } : null
     },
     async createFolder(_parentId, name) {
       const id = `folder-${nextId++}`
       folders.set(name, id)
       files.set(id, new Set())
-      return { id, name, webViewLink: null }
+      return { id, name, webViewLink: `https://drive.test/${id}` }
+    },
+    async createSharePermission() {
+      return undefined
+    },
+    async getWebViewLink() {
+      return null
     },
     async listFileNames(folderId) {
       return new Set(files.get(folderId) ?? [])
@@ -87,7 +93,15 @@ describe('runDriveUploadPlan', () => {
       copiedFiles: 2,
       skippedFiles: 0,
       conflicts: [],
-      errors: []
+      errors: [],
+      driveGroups: [
+        {
+          groupId: 'g1',
+          groupName: 'Birthday',
+          folderId: 'folder-2',
+          webViewLink: 'https://drive.test/folder-2'
+        }
+      ]
     })
     expect(progress.at(-1)).toMatchObject({
       filesCopiedSoFar: 2,
@@ -111,6 +125,32 @@ describe('runDriveUploadPlan', () => {
     expect(summary.copiedFiles).toBe(1)
     expect(summary.skippedFiles).toBe(1)
     expect(summary.totalFiles).toBe(2)
+  })
+
+  it('includes each processed group folder in the Drive summary', async () => {
+    const { api } = createFakeApi()
+    const root = await getOrCreateRootFolder(api)
+    const groups: CopyPlanGroup[] = [
+      { id: 'g1', name: 'Birthday', files: [] },
+      { id: 'g2', name: 'Trip', files: [] }
+    ]
+
+    const summary = await runDriveUploadPlan({ rootFolderId: root.id, groups }, () => {}, api)
+
+    expect(summary.driveGroups).toEqual([
+      {
+        groupId: 'g1',
+        groupName: 'Birthday',
+        folderId: 'folder-2',
+        webViewLink: 'https://drive.test/folder-2'
+      },
+      {
+        groupId: 'g2',
+        groupName: 'Trip',
+        folderId: 'folder-3',
+        webViewLink: 'https://drive.test/folder-3'
+      }
+    ])
   })
 
   it('reuses the same group folder across two runs instead of creating a duplicate', async () => {

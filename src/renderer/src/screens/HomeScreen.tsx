@@ -56,6 +56,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
   } = workflow
   const [activeSessionModal, setActiveSessionModal] = useState<'delete' | 'move' | null>(null)
   const [focusedGroupId, setFocusedGroupId] = useState<string | null>(null)
+  const [copiedGroupFolderId, setCopiedGroupFolderId] = useState<string | null>(null)
 
   const totalFiles = state.groups.reduce((sum, g) => sum + g.files.length, 0)
   const selectedPaths = Array.from(state.selectedPaths)
@@ -73,6 +74,18 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
             : 'empty'
   const boxesDisabled = state.copying || !!state.analyzeProgress
   const isDrive = state.destinationType === 'drive'
+
+  useEffect(() => {
+    if (!copiedGroupFolderId) return
+    const timeout = window.setTimeout(() => setCopiedGroupFolderId(null), 2000)
+    return () => window.clearTimeout(timeout)
+  }, [copiedGroupFolderId])
+
+  async function copyDriveGroupLink(folderId: string): Promise<void> {
+    const link = await window.saaraAPI.shareDriveGroup(folderId)
+    await navigator.clipboard.writeText(link)
+    setCopiedGroupFolderId(folderId)
+  }
 
   useEffect(() => {
     if (subView !== 'reviewing') return
@@ -301,9 +314,27 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
                 </p>
               )}
               {isDrive ? (
-                <button className="primary" onClick={() => window.saaraAPI.openDriveRoot()}>
-                  <GoogleDriveLogo size={18} aria-hidden="true" /> View in Drive
-                </button>
+                <div className="drive-complete-actions">
+                  <button className="primary" onClick={() => window.saaraAPI.openDriveRoot()}>
+                    <GoogleDriveLogo size={18} aria-hidden="true" /> View in Drive
+                  </button>
+                  {(state.copySummary.driveGroups?.length ?? 0) > 0 && (
+                    <div className="drive-group-links">
+                      {state.copySummary.driveGroups?.map((group) => (
+                        <div className="drive-group-link-row" key={group.groupId}>
+                          <span>{group.groupName}</span>
+                          <button
+                            type="button"
+                            className="modal-secondary"
+                            onClick={() => copyDriveGroupLink(group.folderId)}
+                          >
+                            {copiedGroupFolderId === group.folderId ? 'Copied!' : 'Copy link'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <button
                   className="primary"

@@ -57,12 +57,14 @@ export async function runDriveUploadPlan(
   const wait =
     options.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
   const maxBackoffMs = options.maxBackoffMs ?? 20000
+  const driveGroups: NonNullable<CopySummary['driveGroups']> = []
   const summary: CopySummary = {
     totalFiles: 0,
     copiedFiles: 0,
     skippedFiles: 0,
     conflicts: [],
-    errors: []
+    errors: [],
+    driveGroups
   }
   const totalFiles = plan.groups.reduce((sum, g) => sum + g.files.length, 0)
   let doneSoFar = 0
@@ -93,6 +95,12 @@ export async function runDriveUploadPlan(
         await wait(Math.min(5000 * 2 ** (setupAttempt - 1), maxBackoffMs))
       }
     )
+    driveGroups.push({
+      groupId: group.id,
+      groupName: group.name,
+      folderId: folder.id,
+      webViewLink: folder.webViewLink
+    })
 
     for (const file of group.files) {
       summary.totalFiles++

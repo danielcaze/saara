@@ -46,3 +46,7 @@ export const settingsSetRequestSchema = settingsSchema
 export const driveUploadStartRequestSchema = z.object({
   groups: z.array(copyPlanGroupSchema)
 })
+
+export const driveShareGroupRequestSchema = z.object({
+  folderId: z.string().min(1)
+})
