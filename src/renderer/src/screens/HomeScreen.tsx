@@ -57,6 +57,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
   } = workflow
   const [activeSessionModal, setActiveSessionModal] = useState<'delete' | 'move' | null>(null)
   const [copiedGroupFolderId, setCopiedGroupFolderId] = useState<string | null>(null)
+  const [focusedGroupId, setFocusedGroupId] = useState<string | null>(null)
   const [dragging, setDragging] = useState<{ path: string; groupId: string } | null>(null)
   const homeContentRef = useRef<HTMLDivElement>(null)
   const dragPointerY = useRef<number | null>(null)
@@ -99,12 +100,10 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
 
       e.preventDefault()
-      // Ctrl/Cmd+A selects everything visible in the current group when
-      // focus is inside one, and every file across every group otherwise —
-      // so it does what you'd expect whether you're scoped into a folder or
+      // Ctrl/Cmd+A selects everything visible in the last-clicked group when
+      // one is active, and every file across every group otherwise — so it
+      // does what you'd expect whether you're scoped into a folder or
       // looking at the whole session.
-      const focusedGroupId =
-        document.activeElement?.closest<HTMLElement>('[data-group-id]')?.dataset.groupId
       const focusedGroup = focusedGroupId ? state.groups.find((g) => g.id === focusedGroupId) : null
       const paths = focusedGroup
         ? focusedGroup.files.map((f) => f.path)
@@ -114,7 +113,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [subView, state.groups, selectPaths])
+  }, [subView, state.groups, selectPaths, focusedGroupId])
 
   useEffect(() => {
     if (!dragging) return
@@ -278,6 +277,10 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
+              onClick={(e) => {
+                const card = (e.target as HTMLElement).closest<HTMLElement>('[data-group-id]')
+                setFocusedGroupId(card?.dataset.groupId ?? null)
+              }}
             >
               {state.groups.map((g) => (
                 <GroupCard
