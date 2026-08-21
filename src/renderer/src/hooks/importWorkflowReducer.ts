@@ -81,6 +81,7 @@ export type Action =
   | { type: 'DELETE_FILES'; paths: string[] }
   | { type: 'CREATE_GROUP'; groupId: string; name?: string }
   | { type: 'MOVE_FILES'; paths: string[]; targetGroupId: string }
+  | { type: 'REORDER_FILES'; groupId: string; path: string; targetIndex: number }
   | { type: 'RENAME_FILE'; path: string; fileName: string }
 
 export const initialState: State = {
@@ -164,7 +165,10 @@ function reconcileAfterGroupsChange(
   const selectedPathsNext = new Set([...selectedPaths].filter((p) => nextPaths.has(p)))
 
   if (viewerIndex === null || nextFlat.length === 0) {
-    return { viewerIndex: nextFlat.length === 0 ? null : viewerIndex, selectedPaths: selectedPathsNext }
+    return {
+      viewerIndex: nextFlat.length === 0 ? null : viewerIndex,
+      selectedPaths: selectedPathsNext
+    }
   }
 
   const currentPath = prevFlat[viewerIndex]?.file.path
@@ -343,12 +347,36 @@ export function reducer(state: State, action: Action): State {
       const selectedPaths = new Set([...reconciled].filter((p) => !paths.has(p)))
       return { ...state, groups, viewerIndex, selectedPaths }
     }
+    case 'REORDER_FILES': {
+      const group = state.groups.find((candidate) => candidate.id === action.groupId)
+      const sourceIndex = group?.files.findIndex((file) => file.path === action.path) ?? -1
+      if (!group || sourceIndex === -1) return state
+
+      // targetIndex is expressed against the list after the dragged file has
+      // been lifted out. This keeps the drag UI and reducer aligned at both
+      // ends of the list and makes a drop back in the same slot a no-op.
+      const files = group.files.filter((file) => file.path !== action.path)
+      const insertAt = Math.max(0, Math.min(action.targetIndex, files.length))
+      files.splice(insertAt, 0, group.files[sourceIndex])
+      const groups = state.groups.map((candidate) =>
+        candidate.id === action.groupId ? { ...candidate, files } : candidate
+      )
+      const { viewerIndex, selectedPaths } = reconcileAfterGroupsChange(
+        flattenGroupFiles(state.groups),
+        state.viewerIndex,
+        state.selectedPaths,
+        groups
+      )
+      return { ...state, groups, viewerIndex, selectedPaths }
+    }
     case 'RENAME_FILE':
       return {
         ...state,
         groups: state.groups.map((g) => ({
           ...g,
-          files: g.files.map((f) => (f.path === action.path ? { ...f, fileName: action.fileName } : f))
+          files: g.files.map((f) =>
+            f.path === action.path ? { ...f, fileName: action.fileName } : f
+          )
         }))
       }
     default:
