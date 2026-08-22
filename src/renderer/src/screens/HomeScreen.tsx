@@ -19,6 +19,7 @@ import { MoveGroupModal } from '../components/MoveGroupModal'
 import { Lightbox } from '../components/Lightbox'
 import { ProgressBar } from '../components/ProgressBar'
 import type { useImportWorkflow } from '../hooks/useImportWorkflow'
+import saaraLogo from '../assets/saara-logo.png'
 
 const PHASE_LABELS: Record<string, string> = {
   scanning: 'Scanning files',
@@ -178,7 +179,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     <div className="home-screen">
       <div className="screen-header">
         <h1 className="wordmark" style={{ marginRight: 'auto' }}>
-          S<span className="wordmark-accent">a</span>ara
+          <img src={saaraLogo} alt="Saara" className="wordmark-logo" />
         </h1>
         <button
           className="icon-button"
