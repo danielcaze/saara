@@ -15,5 +15,6 @@ export const IPC = {
   DRIVE_DISCONNECT: 'drive:disconnect',
   DRIVE_UPLOAD_START: 'drive:upload:start',
   DRIVE_UPLOAD_PROGRESS: 'drive:upload:progress',
-  DRIVE_OPEN_ROOT: 'drive:openRoot'
+  DRIVE_OPEN_ROOT: 'drive:openRoot',
+  DRIVE_SHARE_GROUP: 'drive:shareGroup'
 } as const

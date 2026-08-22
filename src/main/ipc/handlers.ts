@@ -10,7 +10,8 @@ import {
   copyStartRequestSchema,
   openPathRequestSchema,
   settingsSetRequestSchema,
-  driveUploadStartRequestSchema
+  driveUploadStartRequestSchema,
+  driveShareGroupRequestSchema
 } from '../../shared/ipcSchemas'
 import { analyzeSource, recluster } from '../importSession'
 import { runCopyPlan } from '../fs/copyEngine'
@@ -31,6 +32,8 @@ const driveCipher: TokenCipher = {
   encrypt: (text) => safeStorage.encryptString(text),
   decrypt: (buf) => safeStorage.decryptString(buf)
 }
+
+const driveFolderLinks = new Map<string, string>()
 
 function requireDriveConfig(): DriveOAuthConfig {
   const config = getDriveOAuthConfig()
@@ -139,7 +142,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     const { groups } = driveUploadStartRequestSchema.parse(payload)
     const api = await getConnectedDriveApi()
     const root = await getOrCreateRootFolder(api)
-    return runDriveUploadPlan(
+    const summary = await runDriveUploadPlan(
       { rootFolderId: root.id, groups },
       (progress) => {
         const win = getWindow()
@@ -149,11 +152,25 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
       },
       api
     )
+    for (const group of summary.driveGroups ?? []) {
+      if (group.webViewLink) driveFolderLinks.set(group.folderId, group.webViewLink)
+    }
+    return summary
   })
 
   ipcMain.handle(IPC.DRIVE_OPEN_ROOT, async () => {
     const api = await getConnectedDriveApi()
     const root = await getOrCreateRootFolder(api)
     if (root.webViewLink) await shell.openExternal(root.webViewLink)
+  })
+
+  ipcMain.handle(IPC.DRIVE_SHARE_GROUP, async (_event, payload) => {
+    const { folderId } = driveShareGroupRequestSchema.parse(payload)
+    const api = await getConnectedDriveApi()
+    await api.createSharePermission(folderId)
+    const link = driveFolderLinks.get(folderId) ?? (await api.getWebViewLink(folderId))
+    if (!link) throw new Error('Drive did not return a link for this folder.')
+    driveFolderLinks.set(folderId, link)
+    return link
   })
 }

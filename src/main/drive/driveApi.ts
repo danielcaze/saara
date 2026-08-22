@@ -39,6 +39,8 @@ const FETCH_TIMEOUT_MS = 30000
 export interface DriveApi {
   findFolder(parentId: string, name: string): Promise<DriveFolderRef | null>
   createFolder(parentId: string, name: string): Promise<DriveFolderRef>
+  createSharePermission(fileId: string): Promise<void>
+  getWebViewLink(fileId: string): Promise<string | null>
   listFileNames(folderId: string): Promise<Set<string>>
   uploadFile(params: {
     parentId: string
@@ -138,6 +140,40 @@ export function createGoogleDriveApi(accessTokenProvider: () => Promise<string>)
       const data = (await res.json()) as { id?: string; name?: string; webViewLink?: string }
       if (!data.id || !data.name) throw new Error('Drive did not return the created folder.')
       return { id: data.id, name: data.name, webViewLink: data.webViewLink ?? null }
+    },
+
+    async createSharePermission(fileId) {
+      const permissionsUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/permissions`
+      const listRes = await authedFetch(`${permissionsUrl}?fields=permissions(role,type)`)
+      if (!listRes.ok) throw new Error(`Failed to list Drive permissions (${listRes.status}).`)
+      const data = (await listRes.json()) as {
+        permissions?: { role?: string; type?: string }[]
+      }
+      if (
+        data.permissions?.some(
+          (permission) => permission.role === 'reader' && permission.type === 'anyone'
+        )
+      ) {
+        return
+      }
+
+      const createRes = await authedFetch(permissionsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'reader', type: 'anyone' })
+      })
+      if (!createRes.ok) {
+        throw new Error(`Failed to create Drive share permission (${createRes.status}).`)
+      }
+    },
+
+    async getWebViewLink(fileId) {
+      const res = await authedFetch(
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=webViewLink`
+      )
+      if (!res.ok) throw new Error(`Failed to get Drive folder link (${res.status}).`)
+      const data = (await res.json()) as { webViewLink?: string }
+      return data.webViewLink ?? null
     },
 
     async listFileNames(folderId) {

@@ -19,6 +19,7 @@ import { MoveGroupModal } from '../components/MoveGroupModal'
 import { Lightbox } from '../components/Lightbox'
 import { ProgressBar } from '../components/ProgressBar'
 import type { useImportWorkflow } from '../hooks/useImportWorkflow'
+import saaraLogo from '../assets/saara-logo.png'
 
 const PHASE_LABELS: Record<string, string> = {
   scanning: 'Scanning files',
@@ -56,6 +57,8 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     toggleSelect
   } = workflow
   const [activeSessionModal, setActiveSessionModal] = useState<'delete' | 'move' | null>(null)
+  const [copiedGroupFolderId, setCopiedGroupFolderId] = useState<string | null>(null)
+  const [focusedGroupId, setFocusedGroupId] = useState<string | null>(null)
   const [dragging, setDragging] = useState<{ path: string; groupId: string } | null>(null)
   const homeContentRef = useRef<HTMLDivElement>(null)
   const dragPointerY = useRef<number | null>(null)
@@ -78,6 +81,18 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
   const isDrive = state.destinationType === 'drive'
 
   useEffect(() => {
+    if (!copiedGroupFolderId) return
+    const timeout = window.setTimeout(() => setCopiedGroupFolderId(null), 2000)
+    return () => window.clearTimeout(timeout)
+  }, [copiedGroupFolderId])
+
+  async function copyDriveGroupLink(folderId: string): Promise<void> {
+    const link = await window.saaraAPI.shareDriveGroup(folderId)
+    await navigator.clipboard.writeText(link)
+    setCopiedGroupFolderId(folderId)
+  }
+
+  useEffect(() => {
     if (subView !== 'reviewing') return
 
     function handleKeyDown(e: KeyboardEvent): void {
@@ -86,12 +101,10 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
 
       e.preventDefault()
-      // Ctrl/Cmd+A selects everything visible in the current group when
-      // focus is inside one, and every file across every group otherwise —
-      // so it does what you'd expect whether you're scoped into a folder or
+      // Ctrl/Cmd+A selects everything visible in the last-clicked group when
+      // one is active, and every file across every group otherwise — so it
+      // does what you'd expect whether you're scoped into a folder or
       // looking at the whole session.
-      const focusedGroupId =
-        document.activeElement?.closest<HTMLElement>('[data-group-id]')?.dataset.groupId
       const focusedGroup = focusedGroupId ? state.groups.find((g) => g.id === focusedGroupId) : null
       const paths = focusedGroup
         ? focusedGroup.files.map((f) => f.path)
@@ -101,7 +114,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [subView, state.groups, selectPaths])
+  }, [subView, state.groups, selectPaths, focusedGroupId])
 
   useEffect(() => {
     if (!dragging) return
@@ -166,7 +179,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     <div className="home-screen">
       <div className="screen-header">
         <h1 className="wordmark" style={{ marginRight: 'auto' }}>
-          S<span className="wordmark-accent">a</span>ara
+          <img src={saaraLogo} alt="Saara" className="wordmark-logo" />
         </h1>
         <button
           className="icon-button"
@@ -265,6 +278,10 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
+              onClick={(e) => {
+                const card = (e.target as HTMLElement).closest<HTMLElement>('[data-group-id]')
+                setFocusedGroupId(card?.dataset.groupId ?? null)
+              }}
             >
               {state.groups.map((g) => (
                 <GroupCard
@@ -378,9 +395,27 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
                 </p>
               )}
               {isDrive ? (
-                <button className="primary" onClick={() => window.saaraAPI.openDriveRoot()}>
-                  <GoogleDriveLogo size={18} aria-hidden="true" /> View in Drive
-                </button>
+                <div className="drive-complete-actions">
+                  <button className="primary" onClick={() => window.saaraAPI.openDriveRoot()}>
+                    <GoogleDriveLogo size={18} aria-hidden="true" /> View in Drive
+                  </button>
+                  {(state.copySummary.driveGroups?.length ?? 0) > 0 && (
+                    <div className="drive-group-links">
+                      {state.copySummary.driveGroups?.map((group) => (
+                        <div className="drive-group-link-row" key={group.groupId}>
+                          <span>{group.groupName}</span>
+                          <button
+                            type="button"
+                            className="modal-secondary"
+                            onClick={() => copyDriveGroupLink(group.folderId)}
+                          >
+                            {copiedGroupFolderId === group.folderId ? 'Copied!' : 'Copy link'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <button
                   className="primary"

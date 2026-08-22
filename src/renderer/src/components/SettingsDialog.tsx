@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { ArrowSquareOut, X } from '@phosphor-icons/react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowSquareOut, GoogleDriveLogo, X } from '@phosphor-icons/react'
 import { motion, useReducedMotion } from 'motion/react'
 
 import type { useImportWorkflow } from '../hooks/useImportWorkflow'
@@ -79,6 +79,17 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
   const shouldReduceMotion = reduceMotion ?? false
   const { rawValue, error, handleChange, handleSave } = useThresholdSettings(workflow, onClose)
   const animation = dialogAnimation(shouldReduceMotion)
+  const [disconnecting, setDisconnecting] = useState(false)
+  const { driveStatus } = workflow.state
+
+  async function handleDisconnectDrive(): Promise<void> {
+    setDisconnecting(true)
+    try {
+      await workflow.disconnectDrive()
+    } finally {
+      setDisconnecting(false)
+    }
+  }
 
   useEffect(() => {
     previouslyFocused.current = document.activeElement as HTMLElement | null
@@ -150,6 +161,25 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
           </div>
           {error && <p className="field-error">{error}</p>}
         </div>
+
+        {driveStatus.connected && (
+          <div className="settings-dialog-field">
+            <label>Google Drive</label>
+            <div className="settings-dialog-input-row">
+              <span className="field-value">
+                <GoogleDriveLogo size={16} aria-hidden="true" /> {driveStatus.email}
+              </span>
+              <button
+                type="button"
+                className="modal-secondary"
+                disabled={disconnecting}
+                onClick={() => void handleDisconnectDrive()}
+              >
+                {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <a
           className="settings-dialog-contact"

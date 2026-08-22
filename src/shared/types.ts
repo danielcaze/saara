@@ -50,4 +50,10 @@ export interface CopySummary {
   skippedFiles: number
   conflicts: { originalName: string; resolvedName: string }[]
   errors: { path: string; message: string }[]
+  driveGroups?: {
+    groupId: string
+    groupName: string
+    folderId: string
+    webViewLink: string | null
+  }[]
 }
