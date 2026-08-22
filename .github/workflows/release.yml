@@ -21,8 +21,24 @@ jobs:
 
       - run: npm ci
 
+      - name: Create draft GitHub release
+        # electron-builder's GitHub publisher races itself when it has to
+        # create the release: its installer and blockmap uploads both check
+        # "does a release exist for this tag" at once, both get no, and both
+        # create one - leaving two draft releases under the same tag with
+        # the artifacts split between them. Pre-creating the release here
+        # means electron-builder finds it already exists and just uploads.
+        run: gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --generate-notes --draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - run: npm run build
 
       - run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish GitHub release
+        run: gh release edit "${{ github.ref_name }}" --draft=false
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,4 +1,6 @@
-# Saara
+<p align="center">
+  <img src="src/renderer/src/assets/saara-logo.png" alt="Saara" height="80">
+</p>
 
 A desktop app that imports photos from an SD card, automatically groups them into events by timestamp, and copies or uploads each group to a local folder or Google Drive — without ever overwriting an existing file.
 
