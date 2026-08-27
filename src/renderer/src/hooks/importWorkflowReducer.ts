@@ -146,6 +146,16 @@ function withRebuiltMetadata(groups: PhotoGroup[]): PhotoGroup[] {
   return groups.map((g) => ({ ...g, ...rebuildGroupMetadata(g.files) }))
 }
 
+// A new group named after an existing one is confusing to tell apart in the
+// list, so append " (N)" — the smallest N that isn't already taken.
+function uniqueGroupName(groups: PhotoGroup[], name: string): string {
+  const taken = new Set(groups.map((g) => g.name))
+  if (!taken.has(name)) return name
+  let n = 1
+  while (taken.has(`${name} (${n})`)) n++
+  return `${name} (${n})`
+}
+
 // After any edit that can change which files exist or where they sit in
 // the flattened on-screen order (delete, move, a fresh analysis/recluster
 // replacing groups wholesale), the viewer index and selection can point
@@ -309,7 +319,7 @@ export function reducer(state: State, action: Action): State {
           ...state.groups,
           {
             id: action.groupId,
-            name: action.name?.trim() || 'New group',
+            name: uniqueGroupName(state.groups, action.name?.trim() || 'New group'),
             files: [],
             // An empty group has no dated files, so it must read as a
             // no-date group — leaving isNoDateGroup false here (with

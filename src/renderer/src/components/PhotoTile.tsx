@@ -14,6 +14,7 @@ interface Props {
   insertBefore: boolean
   insertAfter: boolean
   isRenaming: boolean
+  inert: boolean
   onToggleSelect: (path: string) => void
   onOpenViewer: (path: string) => void
   onRequestDelete: (path: string) => void
@@ -42,6 +43,7 @@ function PhotoTileImpl({
   insertBefore,
   insertAfter,
   isRenaming,
+  inert,
   onToggleSelect,
   onOpenViewer,
   onRequestDelete,
@@ -63,6 +65,11 @@ function PhotoTileImpl({
   return (
     <div
       className={`group-card-photo-tile${selected ? ' group-card-photo-tile-selected' : ''}${isDragging ? ' group-card-photo-tile-dragging' : ''}${insertBefore ? ' group-card-photo-tile-insert-before' : ''}${insertAfter ? ' group-card-photo-tile-insert-after' : ''}`}
+      // Collapsed rows past the first are still in the DOM (height-clipped,
+      // not removed) so the collapse animation has real content to grow
+      // from — inert pulls them out of tab order so Tab can't walk into a
+      // row the user can't see.
+      inert={inert || undefined}
       onDragOver={(event) => onFileDragOver(index, event)}
       onDrop={(event) => onFileDrop(index, event)}
     >

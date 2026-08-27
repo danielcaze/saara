@@ -209,10 +209,18 @@ button.icon-button:hover:not(:disabled) {
 }
 
 .group-card {
-  border-bottom: 1px solid var(--color-border);
   border-left: 2px solid var(--color-accent);
-  padding: var(--space-3) var(--space-3);
-  margin-bottom: var(--space-2);
+  /* No inline padding — it insets the grid below far enough that its
+     overflow-x:visible clip box no longer reaches this element's edge,
+     clipping the focus outline on edge tiles again. Header and grid-clip
+     carry their own inline padding instead (see below), so the outline
+     can bleed into room that's actually inside the clip box. */
+  margin-bottom: var(--space-5);
+}
+
+.group-card-divider {
+  margin-inline: var(--space-3);
+  border-top: 1px solid var(--color-border);
 }
 
 .group-card-drop-target {
@@ -221,9 +229,22 @@ button.icon-button:hover:not(:disabled) {
 }
 
 .group-card-header {
+  position: sticky;
+  top: 0;
+  /* Above every in-tile absolutely-positioned control (drag handle, select,
+     delete — highest of those is 3) so a photo scrolled up underneath the
+     sticky header never pokes its controls out through it. */
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  /* Solid (not translucent) so thumbnails scrolling underneath don't show
+     through — home-content is the sticky container, so each group's header
+     pins at its top edge and is naturally handed off to the next group's
+     header once this card scrolls past. */
+  background: var(--color-bg);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
 }
 
 .thumb {
@@ -356,6 +377,13 @@ body,
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Reserves the scrollbar's width whether or not content is currently
+     tall enough to need it. Without this, expanding a group grows the
+     page past the fold, the scrollbar pops in, and every card (including
+     the one you just expanded) loses that width mid-interaction — which
+     was shifting how many photo tiles fit per row between collapsed and
+     expanded. */
+  scrollbar-gutter: stable;
   margin-top: var(--space-4);
 }
 
@@ -454,31 +482,26 @@ input[type='number'] {
 
 /* --- Lightbox, selection, photo-grid additions below --- */
 
+.group-card-photo-grid-clip {
+  /* The animated element — GroupCard drives its height (measured row height
+     vs. measured full scrollHeight) with a Motion spring. Collapsed and
+     expanded now render the exact same grid below, so there's no longer a
+     second track-sizing algorithm that can drift out of sync and mismatch
+     tile counts (the entire prior source of that bug class). */
+  padding-inline: var(--space-3);
+  overflow-x: visible;
+  overflow-y: hidden;
+}
+
 .group-card-photo-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-
-.group-card-photo-grid-collapsed {
-  grid-auto-columns: 144px;
-  grid-auto-flow: column;
-  grid-template-rows: 1fr;
-  overflow: hidden;
-  /* Reserves the same gutter expanded's scrollbar takes, even though this
-     row never scrolls — otherwise it fits one more 144px column than
-     expanded does, and the same photo lands in a different row depending
-     on which state you're in. */
-  scrollbar-gutter: stable;
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
-}
-
-.group-card-photo-grid-expanded {
-  grid-template-columns: repeat(auto-fill, 144px);
-  max-height: 60vh;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
+  /* padding, not margin — margin here collapses through the unpadded
+     .group-card-photo-grid-clip parent and escapes above its box, leaving
+     zero room inside the overflow-y:hidden clip for row 1's focus outline
+     to bleed into. Padding stays inside the clip's own box. */
+  padding-top: var(--space-2);
 }
 
 .group-card-photo-tile {
@@ -609,7 +632,9 @@ input[type='number'] {
   width: 100%;
   margin-top: var(--space-1);
   padding: 0;
-  border: none;
+  /* Transparent, not none — the rename input below reserves the same 1px so
+     swapping button->input doesn't add 2px of border and grow the tile. */
+  border: 1px solid transparent;
   background: none;
   color: inherit;
   font: inherit;
@@ -635,6 +660,19 @@ input[type='number'] {
   width: 100%;
   margin-top: var(--space-1);
   min-width: 0;
+  /* Matches the name button's box exactly (no padding, transparent 1px
+     border, inherited font incl. line-height) so swapping button->input on
+     rename doesn't change the tile's height and shove the grid row below
+     it. `font-size: inherit` alone left the UA default line-height in
+     place, which was a hair shorter than the button's `font: inherit` and
+     shrank the row while renaming with the group collapsed. */
+  padding: 0;
+  border: 1px solid transparent;
+  font: inherit;
+}
+
+.group-card-photo-rename:focus {
+  border-color: var(--color-accent);
 }
 
 .group-card-photo-tile:hover .group-card-photo-name {
