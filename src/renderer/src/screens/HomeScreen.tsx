@@ -1,5 +1,16 @@
 // src/renderer/src/screens/HomeScreen.tsx
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  DragDropProvider,
+  DragOverlay,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+  useDroppable
+} from '@dnd-kit/react'
+import { isSortable } from '@dnd-kit/react/sortable'
+import { PointerActivationConstraints, PointerSensor } from '@dnd-kit/dom'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   FolderOpen,
@@ -18,6 +29,7 @@ import { GroupCard } from '../components/GroupCard'
 import { MoveGroupModal } from '../components/MoveGroupModal'
 import { Lightbox } from '../components/Lightbox'
 import { ProgressBar } from '../components/ProgressBar'
+import { Thumbnail } from '../components/Thumbnail'
 import type { useImportWorkflow } from '../hooks/useImportWorkflow'
 import saaraLogo from '../assets/saara-logo.png'
 
@@ -25,6 +37,85 @@ const PHASE_LABELS: Record<string, string> = {
   scanning: 'Scanning files',
   'reading-metadata': 'Analyzing files',
   clustering: 'Grouping'
+}
+
+interface DraggingPhoto {
+  path: string
+  groupId: string
+  targetGroupId: string | null
+  targetIndex: number | null
+  previewPath: string | null
+  previewSide: 'before' | 'after' | null
+  motionVersion: number
+}
+
+interface GridTile {
+  element: HTMLElement
+  rect: DOMRect
+}
+
+interface GridInsertion {
+  index: number
+  previewPath: string | null
+  previewSide: 'before' | 'after' | null
+}
+
+/**
+ * Converts the pointer position into an insertion index for the responsive
+ * CSS grid. Group-level droppables intentionally cover the grid's gaps, so
+ * their generic "append" data is not precise enough on its own.
+ */
+function insertionIndexAtPointer(
+  groupId: string,
+  point: { x: number; y: number },
+  sourcePath: string,
+  sourceGroupId: string
+): GridInsertion | null {
+  const card = Array.from(document.querySelectorAll<HTMLElement>('[data-group-id]')).find(
+    (element) => element.dataset.groupId === groupId
+  )
+  const grid = card?.querySelector<HTMLElement>('.group-card-photo-grid')
+  const clip = card?.querySelector<HTMLElement>('.group-card-photo-grid-clip')
+  if (!grid || !clip) return null
+
+  const clipBounds = clip.getBoundingClientRect()
+  const tiles: GridTile[] = Array.from(
+    grid.querySelectorAll<HTMLElement>(':scope > .group-card-photo-tile')
+  )
+    .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+    // Collapsed cards keep later rows mounted for their expand animation. They
+    // are not valid destinations until the card has opened.
+    .filter(({ rect }) => rect.bottom > clipBounds.top && rect.top < clipBounds.bottom)
+    .filter(({ element }) => !(groupId === sourceGroupId && element.dataset.path === sourcePath))
+
+  if (tiles.length === 0) return { index: 0, previewPath: null, previewSide: null }
+
+  const rows: GridTile[][] = []
+  for (const tile of tiles) {
+    const row = rows.at(-1)
+    if (row && Math.abs(row[0].rect.top - tile.rect.top) < 1) row.push(tile)
+    else rows.push([tile])
+  }
+
+  const row =
+    rows.find((candidate, index) => {
+      const next = rows[index + 1]
+      return !next || point.y < (candidate[0].rect.bottom + next[0].rect.top) / 2
+    }) ?? rows.at(-1)!
+  const before = row.find((tile) => point.x < tile.rect.left + tile.rect.width / 2)
+  if (before) {
+    return {
+      index: tiles.indexOf(before),
+      previewPath: before.element.dataset.path ?? null,
+      previewSide: 'before'
+    }
+  }
+  const last = row.at(-1)!
+  return {
+    index: tiles.indexOf(last) + 1,
+    previewPath: last.element.dataset.path ?? null,
+    previewSide: 'after'
+  }
 }
 
 interface Props {
@@ -48,6 +139,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     selectPaths,
     deleteFiles,
     moveFiles,
+    moveFileToIndex,
     reorderFiles,
     createGroupAndMoveFiles,
     startCopy,
@@ -60,13 +152,16 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
   const [activeSessionModal, setActiveSessionModal] = useState<'delete' | 'move' | null>(null)
   const [copiedGroupFolderId, setCopiedGroupFolderId] = useState<string | null>(null)
   const [focusedGroupId, setFocusedGroupId] = useState<string | null>(null)
-  const [dragging, setDragging] = useState<{ path: string; groupId: string } | null>(null)
-  const homeContentRef = useRef<HTMLDivElement>(null)
-  const dragPointerY = useRef<number | null>(null)
+  const [dragging, setDragging] = useState<DraggingPhoto | null>(null)
+  const lastDragPositionRef = useRef<{ x: number; y: number } | null>(null)
 
   const totalFiles = state.groups.reduce((sum, g) => sum + g.files.length, 0)
   const selectedPaths = Array.from(state.selectedPaths)
   const hasSelection = selectedPaths.length > 0
+  const draggingFile = dragging
+    ? state.groups.flatMap((group) => group.files).find((file) => file.path === dragging.path)
+    : null
+  const draggingPath = dragging?.path
   const subView = state.copySummary
     ? 'done'
     : state.copying
@@ -88,6 +183,28 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
   const sourceLocked = !state.copying && !!state.sourcePath
   const destinationDisabled = state.copying
   const isDrive = state.destinationType === 'drive'
+
+  useEffect(() => {
+    if (!draggingPath) return
+    let frame: number | null = null
+    const markMotion = (): void => {
+      if (frame !== null) return
+      frame = requestAnimationFrame(() => {
+        frame = null
+        setDragging((current) =>
+          current ? { ...current, motionVersion: current.motionVersion + 1 } : current
+        )
+      })
+    }
+    // Capture catches scrolling containers as well as the page itself. A
+    // closed group must only open after the pointer and its surroundings have
+    // both been still for the full hover delay.
+    window.addEventListener('scroll', markMotion, true)
+    return () => {
+      window.removeEventListener('scroll', markMotion, true)
+      if (frame !== null) cancelAnimationFrame(frame)
+    }
+  }, [draggingPath])
 
   useEffect(() => {
     if (!copiedGroupFolderId) return
@@ -125,60 +242,163 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [subView, state.groups, selectPaths, focusedGroupId])
 
-  useEffect(() => {
-    if (!dragging) return
+  const handleDragStart = useCallback(({ operation }: DragStartEvent): void => {
+    const source = operation.source
+    if (!isSortable(source)) return
+    lastDragPositionRef.current = null
+    setDragging({
+      path: String(source.id),
+      groupId: String(source.initialGroup),
+      targetGroupId: String(source.initialGroup),
+      targetIndex: null,
+      previewPath: null,
+      previewSide: null,
+      motionVersion: 0
+    })
+  }, [])
 
-    let frameId = 0
-    const edgeSize = 72
-    const maxStep = 18
-
-    function autoScroll(): void {
-      const container = homeContentRef.current
-      const pointerY = dragPointerY.current
-      if (container && pointerY !== null) {
-        const bounds = container.getBoundingClientRect()
-        const topDistance = pointerY - bounds.top
-        const bottomDistance = bounds.bottom - pointerY
-        const topStep =
-          topDistance >= 0 && topDistance < edgeSize ? -maxStep * (1 - topDistance / edgeSize) : 0
-        const bottomStep =
-          bottomDistance >= 0 && bottomDistance < edgeSize
-            ? maxStep * (1 - bottomDistance / edgeSize)
-            : 0
-        container.scrollTop += topStep || bottomStep
+  const updateDragPreview = useCallback((operation: DragOverEvent['operation']): void => {
+    const position = operation.position.current
+    const previousPosition = lastDragPositionRef.current
+    const pointerMoved =
+      previousPosition === null ||
+      previousPosition.x !== position.x ||
+      previousPosition.y !== position.y
+    lastDragPositionRef.current = { x: position.x, y: position.y }
+    const target = operation.target
+    const targetGroupId =
+      target && typeof target === 'object' && 'data' in target
+        ? ((target.data as { groupId?: string }).groupId ?? null)
+        : null
+    const targetData =
+      target && typeof target === 'object' && 'data' in target
+        ? (target.data as { dropMode?: string })
+        : null
+    const source = operation.source
+    const sourceGroupId = source && isSortable(source) ? String(source.initialGroup) : null
+    const insertion =
+      targetData?.dropMode !== 'append' && targetGroupId && sourceGroupId && source
+        ? insertionIndexAtPointer(
+            targetGroupId,
+            operation.position.current,
+            String(source.id),
+            sourceGroupId
+          )
+        : null
+    setDragging((current) => {
+      if (!current) return current
+      if (
+        current.targetGroupId === targetGroupId &&
+        current.targetIndex === insertion?.index &&
+        current.previewPath === insertion?.previewPath &&
+        current.previewSide === insertion?.previewSide &&
+        !pointerMoved
+      )
+        return current
+      return {
+        ...current,
+        targetGroupId,
+        targetIndex: insertion?.index ?? null,
+        previewPath: insertion?.previewPath ?? null,
+        previewSide: insertion?.previewSide ?? null,
+        motionVersion: pointerMoved ? current.motionVersion + 1 : current.motionVersion
       }
-      frameId = requestAnimationFrame(autoScroll)
-    }
-
-    frameId = requestAnimationFrame(autoScroll)
-    return () => cancelAnimationFrame(frameId)
-  }, [dragging])
-
-  const endDrag = useCallback((): void => {
-    dragPointerY.current = null
-    setDragging(null)
+    })
   }, [])
 
-  // Stable across renders so GroupCard/PhotoTile's memoization actually
-  // takes effect instead of re-rendering every group on every render.
-  const handleDragStart = useCallback((path: string, groupId: string): void => {
-    setDragging({ path, groupId })
-  }, [])
-
-  const handleMoveToGroup = useCallback(
-    (path: string, groupId: string): void => {
-      moveFiles([path], groupId)
-      endDrag()
-    },
-    [moveFiles, endDrag]
+  const handleDragOver = useCallback(
+    ({ operation }: DragOverEvent): void => updateDragPreview(operation),
+    [updateDragPreview]
   )
 
-  const handleReorder = useCallback(
-    (groupId: string, path: string, targetIndex: number): void => {
-      reorderFiles(groupId, path, targetIndex)
-      endDrag()
+  // Drag-over only fires when dnd-kit changes the hovered entity. Recompute on
+  // every move as well, so crossing a tile's midpoint immediately flips the
+  // insertion bar from its left side to its right side.
+  const handleDragMove = useCallback(
+    ({ operation }: DragMoveEvent): void => updateDragPreview(operation),
+    [updateDragPreview]
+  )
+
+  const handleDragEnd = useCallback(
+    ({ canceled, operation }: DragEndEvent, manager): void => {
+      const source = operation.source
+      const target = operation.target
+      lastDragPositionRef.current = null
+
+      const runAfterDragCleanup = (callback: () => void): void => {
+        const waitForIdle = (): void => {
+          if (!manager.dragOperation.status.idle) {
+            requestAnimationFrame(waitForIdle)
+            return
+          }
+          callback()
+        }
+        requestAnimationFrame(waitForIdle)
+      }
+
+      if (
+        canceled ||
+        !isSortable(source) ||
+        !target ||
+        typeof target !== 'object' ||
+        !('data' in target)
+      ) {
+        runAfterDragCleanup(() => setDragging(null))
+        return
+      }
+
+      const targetData = target.data as { groupId?: string; dropMode?: string; index?: number }
+      const sourceGroupId = String(source.initialGroup)
+      const targetGroupId = targetData.groupId
+      if (targetData.dropMode === 'new') {
+        runAfterDragCleanup(() => {
+          setDragging(null)
+          createGroupAndMoveFiles([String(source.id)])
+        })
+        return
+      }
+      if (!targetGroupId) {
+        runAfterDragCleanup(() => setDragging(null))
+        return
+      }
+
+      const insertion =
+        targetData.dropMode === 'append'
+          ? null
+          : insertionIndexAtPointer(
+              targetGroupId,
+              operation.position.current,
+              String(source.id),
+              sourceGroupId
+            )
+      const targetIndex =
+        insertion?.index ??
+        (targetData.dropMode === 'append'
+          ? Math.max(
+              0,
+              (state.groups.find((group) => group.id === targetGroupId)?.files.length ?? 0) -
+                (sourceGroupId === targetGroupId ? 1 : 0)
+            )
+          : (targetData.index ?? 0))
+
+      const applyDrop = (): void => {
+        if (sourceGroupId === targetGroupId) {
+          reorderFiles(sourceGroupId, String(source.id), targetIndex)
+        } else {
+          moveFileToIndex(String(source.id), targetGroupId, targetIndex)
+        }
+      }
+
+      runAfterDragCleanup(() => {
+        setDragging(null)
+        // `useDeepSignal` schedules its final React update in a microtask
+        // after the manager reports idle. Cross-group movement unmounts the
+        // source sortable, so give that final library render one paint before
+        // React re-parents the tile.
+        requestAnimationFrame(applyDrop)
+      })
     },
-    [reorderFiles, endDrag]
+    [createGroupAndMoveFiles, moveFileToIndex, reorderFiles, state.groups]
   )
 
   const handleRenameGroup = useCallback(
@@ -194,22 +414,25 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     <>
       <FolderPlus size={28} aria-hidden="true" />
       <span className="dropzone-label">Destination</span>
-      {state.driveStatus.connected ? (
-        <span className="dropzone-path">{state.driveStatus.email}</span>
-      ) : (
-        <button
-          type="button"
-          className="field-button"
-          disabled={state.driveConnecting}
-          onClick={(e) => {
-            e.stopPropagation()
-            void connectDrive()
-          }}
-        >
-          {state.driveConnecting ? 'Connecting…' : 'Connect Google Drive'}
-        </button>
-      )}
-      {state.driveError && <span className="field-error">{state.driveError}</span>}
+      <div className="drive-destination-status">
+        {state.driveStatus.connected ? (
+          <span className="dropzone-path">{state.driveStatus.email}</span>
+        ) : state.driveError ? (
+          <span className="field-error">{state.driveError}</span>
+        ) : (
+          <button
+            type="button"
+            className="field-button"
+            disabled={state.driveConnecting}
+            onClick={(e) => {
+              e.stopPropagation()
+              void connectDrive()
+            }}
+          >
+            {state.driveConnecting ? 'Connecting…' : 'Connect Google Drive'}
+          </button>
+        )}
+      </div>
     </>
   ) : undefined
 
@@ -270,13 +493,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
         />
       </div>
 
-      <div
-        ref={homeContentRef}
-        className="home-content"
-        onDragOver={(event) => {
-          if (dragging) dragPointerY.current = event.clientY
-        }}
-      >
+      <div className="home-content">
         <AnimatePresence mode="wait">
           {subView === 'empty' && (
             <motion.p
@@ -320,60 +537,57 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           )}
 
           {subView === 'reviewing' && (
-            <motion.div
-              key="reviewing"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              onClick={(e) => {
-                const card = (e.target as HTMLElement).closest<HTMLElement>('[data-group-id]')
-                setFocusedGroupId(card?.dataset.groupId ?? null)
-              }}
+            <DragDropProvider
+              sensors={(defaults) => [
+                ...defaults.filter((sensor) => sensor !== PointerSensor),
+                PointerSensor.configure({
+                  activationConstraints: [new PointerActivationConstraints.Distance({ value: 6 })]
+                })
+              ]}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragMove={handleDragMove}
+              onDragEnd={handleDragEnd}
             >
-              {state.groups.map((g) => (
-                <GroupCard
-                  key={g.id}
-                  group={g}
-                  selectedPaths={state.selectedPaths}
-                  onRename={handleRenameGroup}
-                  onRenameFile={renameFile}
-                  onDelete={deleteFiles}
-                  onToggleSelect={toggleSelect}
-                  onOpenViewer={openViewer}
-                  dragging={dragging}
-                  onDragStart={handleDragStart}
-                  onDragEnd={endDrag}
-                  onMoveToGroup={handleMoveToGroup}
-                  onReorder={handleReorder}
-                />
-              ))}
-              {dragging && (
-                <motion.div
-                  className="new-group-drop-tile"
-                  initial={{ opacity: 0, scale: 0.98, y: 6 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.98, y: 6 }}
-                  transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-                  onDragOver={(event) => {
-                    event.preventDefault()
-                    event.dataTransfer.dropEffect = 'move'
-                    event.currentTarget.classList.add('new-group-drop-tile-active')
-                  }}
-                  onDragLeave={(event) =>
-                    event.currentTarget.classList.remove('new-group-drop-tile-active')
+              <motion.div
+                key="reviewing"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                onClick={(e) => {
+                  const card = (e.target as HTMLElement).closest<HTMLElement>('[data-group-id]')
+                  setFocusedGroupId(card?.dataset.groupId ?? null)
+                }}
+              >
+                {state.groups.map((g) => (
+                  <GroupCard
+                    key={g.id}
+                    group={g}
+                    selectedPaths={state.selectedPaths}
+                    onRename={handleRenameGroup}
+                    onRenameFile={renameFile}
+                    onDelete={deleteFiles}
+                    onToggleSelect={toggleSelect}
+                    onOpenViewer={openViewer}
+                    showLocalOrder={
+                      state.destinationType === 'local' && state.prefixCopiedFileNames
+                    }
+                    dragging={dragging}
+                  />
+                ))}
+                <NewGroupDropTile visible={Boolean(dragging)} />
+                <DragOverlay className="group-card-drag-overlay" dropAnimation={null}>
+                  {() =>
+                    draggingFile && (
+                      <div className="group-card-drag-overlay-preview">
+                        <Thumbnail path={draggingFile.path} mediaType={draggingFile.mediaType} />
+                      </div>
+                    )
                   }
-                  onDrop={(event) => {
-                    event.preventDefault()
-                    createGroupAndMoveFiles([dragging.path])
-                    endDrag()
-                  }}
-                >
-                  <FolderPlus size={22} aria-hidden="true" />
-                  <span>New group</span>
-                </motion.div>
-              )}
-            </motion.div>
+                </DragOverlay>
+              </motion.div>
+            </DragDropProvider>
           )}
 
           {subView === 'copying' && (
@@ -581,6 +795,26 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           onCancel={() => setActiveSessionModal(null)}
         />
       )}
+    </div>
+  )
+}
+
+function NewGroupDropTile({ visible }: { visible: boolean }): React.JSX.Element {
+  const dropZone = useDroppable({
+    id: 'new-group',
+    type: 'new-group',
+    accept: 'photo',
+    data: { dropMode: 'new' }
+  })
+  const { isDropTarget, ref: setDropZoneNode } = dropZone
+
+  return (
+    <div
+      ref={setDropZoneNode}
+      className={`new-group-drop-tile${visible ? ' new-group-drop-tile-visible' : ''}${isDropTarget ? ' new-group-drop-tile-active' : ''}`}
+    >
+      <FolderPlus size={22} aria-hidden="true" />
+      <span>New group</span>
     </div>
   )
 }

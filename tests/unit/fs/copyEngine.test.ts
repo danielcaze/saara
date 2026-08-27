@@ -18,7 +18,7 @@ afterEach(async () => {
   await fs.rm(destDir, { recursive: true, force: true })
 })
 
-async function writeSrcFile(name: string, content = 'x') {
+async function writeSrcFile(name: string, content = 'x'): Promise<string> {
   const full = path.join(srcDir, name)
   await fs.mkdir(path.dirname(full), { recursive: true })
   await fs.writeFile(full, content)
@@ -41,7 +41,9 @@ describe('runCopyPlan', () => {
     const f1 = await writeSrcFile('IMG_0001.jpg')
     const plan: CopyPlan = {
       destinationRoot: destDir,
-      groups: [{ id: 'group-0', name: '2026-08-11', files: [{ sourcePath: f1, fileName: 'IMG_0001.jpg' }] }],
+      groups: [
+        { id: 'group-0', name: '2026-08-11', files: [{ sourcePath: f1, fileName: 'IMG_0001.jpg' }] }
+      ]
     }
     const summary = await runCopyPlan(plan, () => {})
     expect(summary.copiedFiles).toBe(1)
@@ -57,11 +59,15 @@ describe('runCopyPlan', () => {
 
     const plan: CopyPlan = {
       destinationRoot: destDir,
-      groups: [{ id: 'group-0', name: '2026-08-11', files: [{ sourcePath: f1, fileName: 'IMG_0001.jpg' }] }],
+      groups: [
+        { id: 'group-0', name: '2026-08-11', files: [{ sourcePath: f1, fileName: 'IMG_0001.jpg' }] }
+      ]
     }
     const summary = await runCopyPlan(plan, () => {})
 
-    expect(summary.conflicts).toEqual([{ originalName: 'IMG_0001.jpg', resolvedName: 'IMG_0001 (1).jpg' }])
+    expect(summary.conflicts).toEqual([
+      { originalName: 'IMG_0001.jpg', resolvedName: 'IMG_0001 (1).jpg' }
+    ])
     const original = await fs.readFile(path.join(destDir, '2026-08-11', 'IMG_0001.jpg'), 'utf-8')
     expect(original).toBe('existing') // untouched
     const renamed = await fs.readFile(path.join(destDir, '2026-08-11', 'IMG_0001 (1).jpg'), 'utf-8')
@@ -76,7 +82,7 @@ describe('runCopyPlan', () => {
 
     const plan: CopyPlan = {
       destinationRoot: destDir,
-      groups: [{ id: 'group-0', name: 'g', files: [{ sourcePath: f1, fileName: 'IMG_0001.jpg' }] }],
+      groups: [{ id: 'group-0', name: 'g', files: [{ sourcePath: f1, fileName: 'IMG_0001.jpg' }] }]
     }
     const summary = await runCopyPlan(plan, () => {})
     expect(summary.conflicts[0].resolvedName).toBe('IMG_0001 (2).jpg')
@@ -89,7 +95,7 @@ describe('runCopyPlan', () => {
 
     const plan: CopyPlan = {
       destinationRoot: destDir,
-      groups: [{ id: 'group-0', name: 'g', files: [{ sourcePath: f1, fileName: 'IMG_0002.jpg' }] }],
+      groups: [{ id: 'group-0', name: 'g', files: [{ sourcePath: f1, fileName: 'IMG_0002.jpg' }] }]
     }
     await runCopyPlan(plan, () => {})
     const destStat = await fs.stat(path.join(destDir, 'g', 'IMG_0002.jpg'))
@@ -100,7 +106,7 @@ describe('runCopyPlan', () => {
     const f1 = await writeSrcFile('IMG_0003.jpg', 'original-content')
     const plan: CopyPlan = {
       destinationRoot: destDir,
-      groups: [{ id: 'group-0', name: 'g', files: [{ sourcePath: f1, fileName: 'IMG_0003.jpg' }] }],
+      groups: [{ id: 'group-0', name: 'g', files: [{ sourcePath: f1, fileName: 'IMG_0003.jpg' }] }]
     }
     await runCopyPlan(plan, () => {})
     const sourceContent = await fs.readFile(f1, 'utf-8')
@@ -118,10 +124,10 @@ describe('runCopyPlan', () => {
           name: 'g',
           files: [
             { sourcePath: f1, fileName: 'a.jpg' },
-            { sourcePath: f2, fileName: 'b.jpg' },
-          ],
-        },
-      ],
+            { sourcePath: f2, fileName: 'b.jpg' }
+          ]
+        }
+      ]
     }
     const events: number[] = []
     await runCopyPlan(plan, (e) => events.push(e.filesCopiedSoFar))
@@ -135,12 +141,85 @@ describe('runCopyPlan', () => {
       destinationRoot: destDir,
       groups: [
         { id: 'group-0', name: 'Trip: Paris', files: [{ sourcePath: f1, fileName: 'a.jpg' }] },
-        { id: 'group-1', name: 'Trip Paris', files: [{ sourcePath: f2, fileName: 'b.jpg' }] },
-      ],
+        { id: 'group-1', name: 'Trip Paris', files: [{ sourcePath: f2, fileName: 'b.jpg' }] }
+      ]
     }
     await runCopyPlan(plan, () => {})
     const entries = await fs.readdir(destDir)
     expect(entries.sort()).toEqual(['Trip Paris', 'Trip Paris (2)'])
+  })
+
+  it('can prefix local filenames and stores the copied order in each group folder', async () => {
+    const f1 = await writeSrcFile('first.jpg')
+    const f2 = await writeSrcFile('second.jpg')
+    const plan: CopyPlan = {
+      destinationRoot: destDir,
+      prefixFileNames: true,
+      groups: [
+        {
+          id: 'group-0',
+          name: 'Trip',
+          files: [
+            { sourcePath: f1, fileName: 'first.jpg' },
+            { sourcePath: f2, fileName: 'second.jpg' }
+          ]
+        }
+      ]
+    }
+
+    await runCopyPlan(plan, () => {})
+
+    expect(await fs.readdir(path.join(destDir, 'Trip'))).toEqual([
+      '.saara.json',
+      '0001_first.jpg',
+      '0002_second.jpg'
+    ])
+  })
+
+  it('does not stack a matching order prefix on a repeated local export', async () => {
+    const f1 = await writeSrcFile('0001_first.jpg')
+    const f2 = await writeSrcFile('0002_second.jpg')
+    const plan: CopyPlan = {
+      destinationRoot: destDir,
+      prefixFileNames: true,
+      groups: [
+        {
+          id: 'group-0',
+          name: 'Trip',
+          files: [
+            { sourcePath: f1, fileName: '0001_first.jpg' },
+            { sourcePath: f2, fileName: '0002_second.jpg' }
+          ]
+        }
+      ]
+    }
+
+    await runCopyPlan(plan, () => {})
+
+    expect(await fs.readdir(path.join(destDir, 'Trip'))).toEqual([
+      '.saara.json',
+      '0001_first.jpg',
+      '0002_second.jpg'
+    ])
+  })
+
+  it('replaces an outdated order prefix after a file moves', async () => {
+    const f1 = await writeSrcFile('0002_second.jpg')
+    const plan: CopyPlan = {
+      destinationRoot: destDir,
+      prefixFileNames: true,
+      groups: [
+        {
+          id: 'group-0',
+          name: 'Trip',
+          files: [{ sourcePath: f1, fileName: '0002_second.jpg' }]
+        }
+      ]
+    }
+
+    await runCopyPlan(plan, () => {})
+
+    await expect(fs.stat(path.join(destDir, 'Trip', '0001_second.jpg'))).resolves.toBeDefined()
   })
 
   it('never silently overwrites when two files in the same group share a filename (concurrency race)', async () => {
@@ -161,17 +240,21 @@ describe('runCopyPlan', () => {
           name: 'g',
           files: [
             { sourcePath: f1, fileName: 'IMG_0001.jpg' },
-            { sourcePath: f2, fileName: 'IMG_0001.jpg' },
-          ],
-        },
-      ],
+            { sourcePath: f2, fileName: 'IMG_0001.jpg' }
+          ]
+        }
+      ]
     }
     const summary = await runCopyPlan(plan, () => {})
 
     // Both files must survive under distinct names, no data loss
-    const destFiles = await fs.readdir(path.join(destDir, 'g'))
+    const destFiles = (await fs.readdir(path.join(destDir, 'g'))).filter(
+      (file) => file !== '.saara.json'
+    )
     expect(destFiles).toHaveLength(2)
-    const contents = await Promise.all(destFiles.map((f) => fs.readFile(path.join(destDir, 'g', f), 'utf-8')))
+    const contents = await Promise.all(
+      destFiles.map((f) => fs.readFile(path.join(destDir, 'g', f), 'utf-8'))
+    )
     expect(contents.sort()).toEqual(['content-from-camera-A', 'content-from-camera-B'])
     expect(summary.copiedFiles).toBe(2)
     expect(summary.conflicts).toHaveLength(1)
@@ -187,10 +270,10 @@ describe('runCopyPlan', () => {
           name: 'g',
           files: [
             { sourcePath: path.join(srcDir, 'missing.jpg'), fileName: 'missing.jpg' },
-            { sourcePath: f1, fileName: 'good.jpg' },
-          ],
-        },
-      ],
+            { sourcePath: f1, fileName: 'good.jpg' }
+          ]
+        }
+      ]
     }
     const summary = await runCopyPlan(plan, () => {})
     expect(summary.errors).toHaveLength(1)

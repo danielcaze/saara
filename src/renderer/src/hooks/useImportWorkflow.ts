@@ -28,6 +28,7 @@ interface ImportWorkflow {
   connectDrive: () => Promise<void>
   disconnectDrive: () => Promise<void>
   recluster: (hours: number) => Promise<void>
+  setPrefixCopiedFileNames: (enabled: boolean) => void
   renameGroup: (groupId: string, name: string) => void
   startCopy: () => Promise<void>
   openViewer: (path: string) => void
@@ -39,6 +40,7 @@ interface ImportWorkflow {
   selectPaths: (paths: string[]) => void
   deleteFiles: (paths: string[]) => void
   moveFiles: (paths: string[], targetGroupId: string) => void
+  moveFileToIndex: (path: string, targetGroupId: string, targetIndex: number) => void
   reorderFiles: (groupId: string, path: string, targetIndex: number) => void
   createGroupAndMoveFiles: (paths: string[], name?: string) => void
   renameFile: (path: string, fileName: string) => void
@@ -53,8 +55,9 @@ export function useImportWorkflow(): ImportWorkflow {
   const analyzeRunId = useRef(0)
 
   useEffect(() => {
-    window.saaraAPI.getSettings().then(({ thresholdHours }) => {
+    window.saaraAPI.getSettings().then(({ thresholdHours, prefixCopiedFileNames }) => {
       dispatch({ type: 'SET_THRESHOLD_HOURS', hours: thresholdHours })
+      dispatch({ type: 'SET_PREFIX_COPIED_FILE_NAMES', enabled: prefixCopiedFileNames })
     })
     window.saaraAPI.driveStatus().then((status) => {
       dispatch({ type: 'DRIVE_STATUS_LOADED', status })
@@ -134,6 +137,10 @@ export function useImportWorkflow(): ImportWorkflow {
     dispatch({ type: 'SET_GROUPS', groups })
   }, [])
 
+  const setPrefixCopiedFileNames = useCallback((enabled: boolean) => {
+    dispatch({ type: 'SET_PREFIX_COPIED_FILE_NAMES', enabled })
+  }, [])
+
   const renameGroup = useCallback(
     (groupId: string, name: string) => {
       dispatch({
@@ -164,7 +171,11 @@ export function useImportWorkflow(): ImportWorkflow {
     try {
       const summary = isDrive
         ? await window.saaraAPI.driveUploadStart(groups)
-        : await window.saaraAPI.copyStart(state.destinationPath as string, groups)
+        : await window.saaraAPI.copyStart(
+            state.destinationPath as string,
+            groups,
+            state.prefixCopiedFileNames
+          )
       dispatch({ type: 'COPY_DONE', summary })
     } catch (err) {
       // Covers upfront failures with no per-file granularity to attach an error
@@ -176,7 +187,13 @@ export function useImportWorkflow(): ImportWorkflow {
     } finally {
       unsubscribe()
     }
-  }, [state.destinationType, state.destinationPath, state.driveStatus.connected, state.groups])
+  }, [
+    state.destinationType,
+    state.destinationPath,
+    state.driveStatus.connected,
+    state.groups,
+    state.prefixCopiedFileNames
+  ])
 
   const openViewer = useCallback(
     (path: string) => {
@@ -221,6 +238,13 @@ export function useImportWorkflow(): ImportWorkflow {
     dispatch({ type: 'MOVE_FILES', paths, targetGroupId })
   }, [])
 
+  const moveFileToIndex = useCallback(
+    (path: string, targetGroupId: string, targetIndex: number) => {
+      dispatch({ type: 'MOVE_FILE_TO_INDEX', path, targetGroupId, targetIndex })
+    },
+    []
+  )
+
   const reorderFiles = useCallback((groupId: string, path: string, targetIndex: number) => {
     dispatch({ type: 'REORDER_FILES', groupId, path, targetIndex })
   }, [])
@@ -246,6 +270,7 @@ export function useImportWorkflow(): ImportWorkflow {
     connectDrive: connectDriveAccount,
     disconnectDrive,
     recluster,
+    setPrefixCopiedFileNames,
     renameGroup,
     startCopy,
     openViewer,
@@ -257,6 +282,7 @@ export function useImportWorkflow(): ImportWorkflow {
     selectPaths,
     deleteFiles,
     moveFiles,
+    moveFileToIndex,
     reorderFiles,
     createGroupAndMoveFiles,
     renameFile

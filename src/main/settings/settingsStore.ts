@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { settingsSchema, type Settings } from '../../shared/settingsSchema'
 
-const DEFAULT_SETTINGS: Settings = { thresholdHours: 24 }
+const DEFAULT_SETTINGS: Settings = { thresholdHours: 24, prefixCopiedFileNames: false }
 
 function settingsFilePath(userDataDir: string): string {
   return path.join(userDataDir, 'settings.json')

@@ -30,6 +30,14 @@ export interface CopyPlanGroup {
   files: { sourcePath: string; fileName: string }[]
 }
 
+export interface LocalOrderManifestGroup {
+  id: string
+  name: string
+  groupOrder: number
+  folderName: string
+  files: string[]
+}
+
 export interface CopyProgressEvent {
   groupId: string
   groupName: string

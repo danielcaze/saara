@@ -36,7 +36,7 @@ export function runAnalyzeInWorker(
       }
       settled = true
       if (message.type === 'done') {
-        setCachedMetadata(message.metadata)
+        setCachedMetadata(message.metadata, sourcePath, message.orderManifest)
         resolve(message.groups)
       } else {
         reject(new Error(message.message))

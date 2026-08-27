@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { clusterByGap, type TimestampedFile } from '../../../src/shared/clustering/clusterByGap'
 
 const DAY = 24 * 60 * 60 * 1000
-const d = (iso: string) => new Date(iso)
+const d = (iso: string): Date => new Date(iso)
 
 describe('clusterByGap', () => {
   it('returns empty array for empty input', () => {
@@ -30,7 +30,7 @@ describe('clusterByGap', () => {
     const t1 = new Date(t0.getTime() + DAY) // exactly 24h later
     const files: TimestampedFile[] = [
       { path: 'a.jpg', timestamp: t0 },
-      { path: 'b.jpg', timestamp: t1 },
+      { path: 'b.jpg', timestamp: t1 }
     ]
     const groups = clusterByGap(files, DAY)
     expect(groups).toHaveLength(1)
@@ -42,7 +42,7 @@ describe('clusterByGap', () => {
     const t1 = new Date(t0.getTime() + DAY + 1)
     const files: TimestampedFile[] = [
       { path: 'a.jpg', timestamp: t0 },
-      { path: 'b.jpg', timestamp: t1 },
+      { path: 'b.jpg', timestamp: t1 }
     ]
     const groups = clusterByGap(files, DAY)
     expect(groups).toHaveLength(2)
@@ -57,7 +57,7 @@ describe('clusterByGap', () => {
     const files: TimestampedFile[] = [
       { path: 'c.jpg', timestamp: t2 },
       { path: 'a.jpg', timestamp: t0 },
-      { path: 'b.jpg', timestamp: t1 },
+      { path: 'b.jpg', timestamp: t1 }
     ]
     const groups = clusterByGap(files, DAY)
     expect(groups).toHaveLength(1)
@@ -68,7 +68,7 @@ describe('clusterByGap', () => {
     const t0 = d('2026-08-01T10:00:00Z')
     const files: TimestampedFile[] = [
       { path: 'IMG_0001.CR2', timestamp: t0 },
-      { path: 'IMG_0001.JPG', timestamp: t0 },
+      { path: 'IMG_0001.JPG', timestamp: t0 }
     ]
     const groups = clusterByGap(files, DAY)
     expect(groups).toHaveLength(1)
@@ -82,7 +82,7 @@ describe('clusterByGap', () => {
       { path: 'a.jpg', timestamp: t0 },
       { path: 'nodate1.jpg', timestamp: null },
       { path: 'b.jpg', timestamp: t1 },
-      { path: 'nodate2.jpg', timestamp: null },
+      { path: 'nodate2.jpg', timestamp: null }
     ]
     const groups = clusterByGap(files, DAY)
     expect(groups).toHaveLength(3)
@@ -97,7 +97,7 @@ describe('clusterByGap', () => {
   it('handles all-undated input as a single no-date group, no crash', () => {
     const files: TimestampedFile[] = [
       { path: 'b.jpg', timestamp: null },
-      { path: 'a.jpg', timestamp: null },
+      { path: 'a.jpg', timestamp: null }
     ]
     const groups = clusterByGap(files, DAY)
     expect(groups).toHaveLength(1)
@@ -108,7 +108,7 @@ describe('clusterByGap', () => {
   it('is deterministic for identical input', () => {
     const files: TimestampedFile[] = [
       { path: 'a.jpg', timestamp: d('2026-08-01T10:00:00Z') },
-      { path: 'b.jpg', timestamp: d('2026-08-03T10:00:00Z') },
+      { path: 'b.jpg', timestamp: d('2026-08-03T10:00:00Z') }
     ]
     const run1 = clusterByGap(files, DAY)
     const run2 = clusterByGap(files, DAY)
@@ -120,7 +120,7 @@ describe('clusterByGap', () => {
     const invalidDate = new Date('not-a-real-date')
     const files: TimestampedFile[] = [
       { path: 'a.jpg', timestamp: t0 },
-      { path: 'corrupt.jpg', timestamp: invalidDate },
+      { path: 'corrupt.jpg', timestamp: invalidDate }
     ]
     const groups = clusterByGap(files, DAY)
     expect(groups).toHaveLength(2)
