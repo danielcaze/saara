@@ -28,6 +28,8 @@ const saaraAPI = {
     return () => ipcRenderer.removeListener(IPC.ANALYZE_PROGRESS, listener)
   },
 
+  analyzeCancel: (): Promise<void> => ipcRenderer.invoke(IPC.ANALYZE_CANCEL),
+
   recluster: (thresholdMs: number): Promise<{ groups: PhotoGroup[] }> =>
     ipcRenderer.invoke(IPC.RECOMPUTE_CLUSTERS, { thresholdMs }),
 

@@ -1,5 +1,5 @@
 // src/renderer/src/screens/HomeScreen.tsx
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   FolderOpen,
@@ -37,6 +37,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     state,
     pickSource,
     dropSource,
+    removeSource,
     pickDestination,
     dropDestination,
     toggleDestinationType,
@@ -77,7 +78,15 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           : state.groups.length > 0
             ? 'reviewing'
             : 'empty'
-  const boxesDisabled = state.copying || !!state.analyzeProgress
+  // Source locks once picked (removable only via its X badge, which also
+  // cancels an in-flight analyze) — re-selecting mid-analyze would leave the
+  // worker analyzing a folder no longer reflected on screen. Destination has
+  // no such hazard: picking it doesn't touch the source's analyze, and
+  // nothing consumes it until a copy actually starts, so it only locks once
+  // a copy is running.
+  const sourceDisabled = state.copying
+  const sourceLocked = !state.copying && !!state.sourcePath
+  const destinationDisabled = state.copying
   const isDrive = state.destinationType === 'drive'
 
   useEffect(() => {
@@ -145,10 +154,39 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     return () => cancelAnimationFrame(frameId)
   }, [dragging])
 
-  function endDrag(): void {
+  const endDrag = useCallback((): void => {
     dragPointerY.current = null
     setDragging(null)
-  }
+  }, [])
+
+  // Stable across renders so GroupCard/PhotoTile's memoization actually
+  // takes effect instead of re-rendering every group on every render.
+  const handleDragStart = useCallback((path: string, groupId: string): void => {
+    setDragging({ path, groupId })
+  }, [])
+
+  const handleMoveToGroup = useCallback(
+    (path: string, groupId: string): void => {
+      moveFiles([path], groupId)
+      endDrag()
+    },
+    [moveFiles, endDrag]
+  )
+
+  const handleReorder = useCallback(
+    (groupId: string, path: string, targetIndex: number): void => {
+      reorderFiles(groupId, path, targetIndex)
+      endDrag()
+    },
+    [reorderFiles, endDrag]
+  )
+
+  const handleRenameGroup = useCallback(
+    (groupId: string, name: string): void => {
+      renameGroup(groupId, name)
+    },
+    [renameGroup]
+  )
 
   const destinationReady = isDrive ? state.driveStatus.connected : !!state.destinationPath
 
@@ -184,7 +222,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
         <button
           className="icon-button"
           onClick={onOpenSettings}
-          disabled={boxesDisabled}
+          disabled={state.copying}
           aria-label="Settings"
         >
           <Gear size={18} aria-hidden="true" />
@@ -199,7 +237,17 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           path={state.sourcePath}
           onPick={pickSource}
           onDropPath={dropSource}
-          disabled={boxesDisabled}
+          disabled={sourceDisabled}
+          locked={sourceLocked}
+          cornerButton={
+            state.sourcePath && !state.copying
+              ? {
+                  icon: <X size={16} aria-hidden="true" />,
+                  label: 'Remove source folder',
+                  onClick: removeSource
+                }
+              : undefined
+          }
         />
         <Dropzone
           label="Destination"
@@ -208,7 +256,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           path={state.destinationPath}
           onPick={pickDestination}
           onDropPath={dropDestination}
-          disabled={boxesDisabled}
+          disabled={destinationDisabled}
           overrideBody={driveBody}
           cornerButton={{
             icon: isDrive ? (
@@ -288,22 +336,16 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
                   key={g.id}
                   group={g}
                   selectedPaths={state.selectedPaths}
-                  onRename={(name) => renameGroup(g.id, name)}
+                  onRename={handleRenameGroup}
                   onRenameFile={renameFile}
                   onDelete={deleteFiles}
                   onToggleSelect={toggleSelect}
                   onOpenViewer={openViewer}
                   dragging={dragging}
-                  onDragStart={(path, groupId) => setDragging({ path, groupId })}
+                  onDragStart={handleDragStart}
                   onDragEnd={endDrag}
-                  onMoveToGroup={(path, groupId) => {
-                    moveFiles([path], groupId)
-                    endDrag()
-                  }}
-                  onReorder={(groupId, path, targetIndex) => {
-                    reorderFiles(groupId, path, targetIndex)
-                    endDrag()
-                  }}
+                  onMoveToGroup={handleMoveToGroup}
+                  onReorder={handleReorder}
                 />
               ))}
               {dragging && (

@@ -56,6 +56,7 @@ export interface State {
 
 export type Action =
   | { type: 'SET_SOURCE'; path: string }
+  | { type: 'REMOVE_SOURCE' }
   | { type: 'SET_DESTINATION'; path: string }
   | { type: 'TOGGLE_DESTINATION_TYPE' }
   | { type: 'DRIVE_STATUS_LOADED'; status: DriveStatus }
@@ -186,6 +187,16 @@ export function reducer(state: State, action: Action): State {
         groups: [],
         analyzeError: null,
         copySummary: null,
+        viewerIndex: null,
+        selectedPaths: new Set()
+      }
+    case 'REMOVE_SOURCE':
+      return {
+        ...state,
+        sourcePath: null,
+        groups: [],
+        analyzeProgress: null,
+        analyzeError: null,
         viewerIndex: null,
         selectedPaths: new Set()
       }

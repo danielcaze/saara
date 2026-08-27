@@ -1,5 +1,5 @@
 // src/renderer/src/hooks/useImportWorkflow.ts
-import { useCallback, useEffect, useReducer } from 'react'
+import { useCallback, useEffect, useReducer, useRef } from 'react'
 import {
   defaultGroupName,
   flattenGroupFiles,
@@ -21,6 +21,7 @@ interface ImportWorkflow {
   state: State
   pickSource: () => Promise<void>
   dropSource: (path: string) => Promise<void>
+  removeSource: () => void
   pickDestination: () => Promise<void>
   dropDestination: (path: string) => void
   toggleDestinationType: () => void
@@ -45,6 +46,11 @@ interface ImportWorkflow {
 
 export function useImportWorkflow(): ImportWorkflow {
   const [state, dispatch] = useReducer(reducer, initialState)
+  // Bumped on every removeSource() call so a still-in-flight analyze from a
+  // removed source can't land its result/error after the state has already
+  // reset to "no source" — cancelAnalyze() stops the worker, this stops the
+  // stale promise resolution from being acted on.
+  const analyzeRunId = useRef(0)
 
   useEffect(() => {
     window.saaraAPI.getSettings().then(({ thresholdHours }) => {
@@ -56,13 +62,17 @@ export function useImportWorkflow(): ImportWorkflow {
   }, [])
 
   const runAnalyze = useCallback(async (sourcePath: string, thresholdHours: number) => {
+    const runId = ++analyzeRunId.current
     const unsubscribe = window.saaraAPI.onAnalyzeProgress((progress) => {
+      if (analyzeRunId.current !== runId) return
       dispatch({ type: 'ANALYZE_PROGRESS', progress })
     })
     try {
       const { groups } = await window.saaraAPI.analyze(sourcePath, thresholdHours * 3600_000)
+      if (analyzeRunId.current !== runId) return
       dispatch({ type: 'ANALYZE_DONE', groups })
     } catch (err) {
+      if (analyzeRunId.current !== runId) return
       dispatch({ type: 'ANALYZE_ERROR', message: friendlyIpcError(err) })
     } finally {
       unsubscribe()
@@ -83,6 +93,12 @@ export function useImportWorkflow(): ImportWorkflow {
     },
     [runAnalyze, state.thresholdHours]
   )
+
+  const removeSource = useCallback(() => {
+    analyzeRunId.current++
+    if (state.analyzeProgress) void window.saaraAPI.analyzeCancel()
+    dispatch({ type: 'REMOVE_SOURCE' })
+  }, [state.analyzeProgress])
 
   const pickDestination = useCallback(async () => {
     const path = await window.saaraAPI.selectFolder('destination')
@@ -223,6 +239,7 @@ export function useImportWorkflow(): ImportWorkflow {
     state,
     pickSource,
     dropSource,
+    removeSource,
     pickDestination,
     dropDestination,
     toggleDestinationType,

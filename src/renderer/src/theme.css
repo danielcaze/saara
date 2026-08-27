@@ -447,6 +447,11 @@ input[type='number'] {
   border-color: var(--color-accent);
 }
 
+.dropzone-corner-button:active {
+  transform: scale(0.92);
+  transition: transform 100ms ease-out;
+}
+
 /* --- Lightbox, selection, photo-grid additions below --- */
 
 .group-card-photo-grid {
@@ -460,6 +465,11 @@ input[type='number'] {
   grid-auto-flow: column;
   grid-template-rows: 1fr;
   overflow: hidden;
+  /* Reserves the same gutter expanded's scrollbar takes, even though this
+     row never scrolls — otherwise it fits one more 144px column than
+     expanded does, and the same photo lands in a different row depending
+     on which state you're in. */
+  scrollbar-gutter: stable;
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
   mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
 }
@@ -468,7 +478,7 @@ input[type='number'] {
   grid-template-columns: repeat(auto-fill, 144px);
   max-height: 60vh;
   overflow-y: auto;
-  padding-right: var(--space-1);
+  scrollbar-gutter: stable;
 }
 
 .group-card-photo-tile {
@@ -593,6 +603,9 @@ input[type='number'] {
 }
 
 .group-card-photo-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   width: 100%;
   margin-top: var(--space-1);
   padding: 0;
@@ -602,6 +615,17 @@ input[type='number'] {
   font: inherit;
   text-align: left;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-card-photo-name-icon {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.group-card-photo-name-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -800,6 +824,10 @@ input[type='number'] {
   align-items: center;
   gap: var(--space-2);
   color: var(--color-text-muted);
+}
+
+.lightbox-video-error-detail {
+  font-size: 0.8125rem;
 }
 
 .lightbox-video-container {
