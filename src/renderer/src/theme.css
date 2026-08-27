@@ -501,6 +501,15 @@ input[type='number'] {
   overflow: hidden;
 }
 
+.group-card-photo-grid-collapsed .group-card-photo-tile {
+  /* Grid items default to min-height:auto, which refuses to shrink below the
+     tile's own content size even inside a 0-height track — without this,
+     every row-2+ tile still renders a squashed sliver of its thumbnail
+     instead of actually collapsing to nothing. */
+  min-height: 0;
+  overflow: hidden;
+}
+
 .group-card-photo-tile {
   position: relative;
 }
