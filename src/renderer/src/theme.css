@@ -456,14 +456,14 @@ input[type='number'] {
 }
 
 .group-card-photo-grid-collapsed {
-  grid-auto-columns: minmax(120px, 1fr);
+  grid-auto-columns: minmax(120px, 200px);
   grid-auto-flow: column;
   grid-template-rows: 1fr;
   overflow: hidden;
 }
 
 .group-card-photo-grid-expanded {
-  grid-template-columns: repeat(auto-fill, minmax(144px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(144px, 200px));
   max-height: 60vh;
   overflow-y: auto;
   padding-right: var(--space-1);
