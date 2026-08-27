@@ -15,6 +15,7 @@ const sortablePlugins = [SortableKeyboardPlugin]
 
 interface Props {
   file: FileMeta
+  displayFileName: string
   groupId: string
   index: number
   selected: boolean
@@ -40,6 +41,7 @@ interface Props {
 // fresh arrow function in any of these would defeat the memoization.
 function PhotoTileImpl({
   file,
+  displayFileName,
   groupId,
   index,
   selected,
@@ -153,7 +155,7 @@ function PhotoTileImpl({
         <button type="button" className="group-card-photo-name" onClick={beginRename}>
           <PencilSimple size={12} className="group-card-photo-name-icon" aria-hidden="true" />
           <span className="group-card-photo-name-text">
-            {file.fileName} {file.metadataError ? `(error: ${file.metadataError})` : ''}
+            {displayFileName} {file.metadataError ? `(error: ${file.metadataError})` : ''}
           </span>
         </button>
       )}

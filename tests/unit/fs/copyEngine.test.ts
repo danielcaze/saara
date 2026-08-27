@@ -176,6 +176,52 @@ describe('runCopyPlan', () => {
     ])
   })
 
+  it('does not stack a matching order prefix on a repeated local export', async () => {
+    const f1 = await writeSrcFile('0001_first.jpg')
+    const f2 = await writeSrcFile('0002_second.jpg')
+    const plan: CopyPlan = {
+      destinationRoot: destDir,
+      prefixFileNames: true,
+      groups: [
+        {
+          id: 'group-0',
+          name: 'Trip',
+          files: [
+            { sourcePath: f1, fileName: '0001_first.jpg' },
+            { sourcePath: f2, fileName: '0002_second.jpg' }
+          ]
+        }
+      ]
+    }
+
+    await runCopyPlan(plan, () => {})
+
+    expect(await fs.readdir(path.join(destDir, 'Trip'))).toEqual([
+      '.saara.json',
+      '0001_first.jpg',
+      '0002_second.jpg'
+    ])
+  })
+
+  it('replaces an outdated order prefix after a file moves', async () => {
+    const f1 = await writeSrcFile('0002_second.jpg')
+    const plan: CopyPlan = {
+      destinationRoot: destDir,
+      prefixFileNames: true,
+      groups: [
+        {
+          id: 'group-0',
+          name: 'Trip',
+          files: [{ sourcePath: f1, fileName: '0002_second.jpg' }]
+        }
+      ]
+    }
+
+    await runCopyPlan(plan, () => {})
+
+    await expect(fs.stat(path.join(destDir, 'Trip', '0001_second.jpg'))).resolves.toBeDefined()
+  })
+
   it('never silently overwrites when two files in the same group share a filename (concurrency race)', async () => {
     const srcA = path.join(srcDir, 'a')
     const srcB = path.join(srcDir, 'b')

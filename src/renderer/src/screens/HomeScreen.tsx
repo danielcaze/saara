@@ -567,6 +567,9 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
                     onDelete={deleteFiles}
                     onToggleSelect={toggleSelect}
                     onOpenViewer={openViewer}
+                    showLocalOrder={
+                      state.destinationType === 'local' && state.prefixCopiedFileNames
+                    }
                     dragging={dragging}
                   />
                 ))}

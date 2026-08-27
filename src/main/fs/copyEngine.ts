@@ -3,6 +3,7 @@ import path from 'node:path'
 import { sanitizeFolderName } from './sanitizeFolderName'
 import { writeOrderManifest } from './orderManifest'
 import type { CopyPlanGroup, CopyProgressEvent, CopySummary } from '../../shared/types'
+import { localOrderFileName } from '../../shared/localOrderFileName'
 
 export interface CopyPlan {
   destinationRoot: string
@@ -65,11 +66,6 @@ async function copyOne(
   return { resolvedName: finalName, conflict: wasConflict }
 }
 
-function orderedFileName(fileName: string, index: number, total: number): string {
-  const width = Math.max(4, String(total).length)
-  return `${String(index + 1).padStart(width, '0')}_${fileName}`
-}
-
 async function runPool<T>(
   items: T[],
   concurrency: number,
@@ -109,9 +105,10 @@ export async function runCopyPlan(
 
     await runPool(group.files, CONCURRENCY, async (file, index) => {
       summary.totalFiles++
+      let progressFileName = file.fileName
       try {
         const requestedName = plan.prefixFileNames
-          ? orderedFileName(file.fileName, index, group.files.length)
+          ? localOrderFileName(file.fileName, index, group.files.length)
           : file.fileName
         const { resolvedName, conflict } = await copyOne(
           file.sourcePath,
@@ -120,6 +117,7 @@ export async function runCopyPlan(
           existingNames
         )
         copiedNames[index] = resolvedName
+        progressFileName = resolvedName
         summary.copiedFiles++
         if (conflict) {
           summary.conflicts.push({ originalName: requestedName, resolvedName })
@@ -134,7 +132,7 @@ export async function runCopyPlan(
         onProgress({
           groupId: group.id,
           groupName: group.name,
-          fileName: file.fileName,
+          fileName: progressFileName,
           filesCopiedSoFar: copiedSoFar,
           totalFiles
         })

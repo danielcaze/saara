@@ -4,6 +4,7 @@ import { useDroppable } from '@dnd-kit/react'
 import { motion, useReducedMotion } from 'motion/react'
 
 import type { PhotoGroup } from '../../../shared/types'
+import { localOrderFileName } from '../../../shared/localOrderFileName'
 
 import { DeleteConfirmModal } from './DeleteConfirmModal'
 import { PhotoTile } from './PhotoTile'
@@ -16,6 +17,7 @@ interface Props {
   onDelete: (paths: string[]) => void
   onToggleSelect: (path: string) => void
   onOpenViewer: (path: string) => void
+  showLocalOrder: boolean
   dragging: {
     path: string
     groupId: string
@@ -35,6 +37,7 @@ export function GroupCard({
   onDelete,
   onToggleSelect,
   onOpenViewer,
+  showLocalOrder,
   dragging
 }: Props): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
@@ -179,6 +182,11 @@ export function GroupCard({
             <PhotoTile
               key={file.path}
               file={file}
+              displayFileName={
+                showLocalOrder
+                  ? localOrderFileName(file.fileName, index, group.files.length)
+                  : file.fileName
+              }
               groupId={group.id}
               index={index}
               selected={selectedPaths.has(file.path)}
