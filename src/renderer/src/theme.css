@@ -474,46 +474,20 @@ input[type='number'] {
 
 /* --- Lightbox, selection, photo-grid additions below --- */
 
+.group-card-photo-grid-clip {
+  /* The animated element — GroupCard drives its height (measured row height
+     vs. measured full scrollHeight) with a Motion spring. Collapsed and
+     expanded now render the exact same grid below, so there's no longer a
+     second track-sizing algorithm that can drift out of sync and mismatch
+     tile counts (the entire prior source of that bug class). */
+  overflow: hidden;
+}
+
 .group-card-photo-grid {
   display: grid;
-  /* minmax(…, 1fr) — not a bare 144px — so the fitted tracks always stretch
-     to consume the full row width exactly. A fixed 144px track leaves a
-     sub-144px leftover strip at the row's end: auto-fill's floor-fit then
-     just wastes it (expanded shows one fewer full tile than the width
-     allows), while collapsed's column-flow continuation rendered a
-     same-size implicit tile into that same strip, clipped to a stray
-     partial "extra" image. Stretching removes the leftover entirely, so
-     both states fit the identical, deterministic tile count. */
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: var(--space-2);
   margin-top: var(--space-2);
-}
-
-.group-card-photo-grid-collapsed {
-  /* Same row-flow grid as expanded (identical grid-template-columns from the
-     base rule, so exact same auto-fill column count either way — no second
-     track-sizing algorithm to drift out of sync with). Row 1 sizes normally
-     (grid-template-rows: auto); every row after it is forced to 0 height
-     (grid-auto-rows: 0), so only the first row is visible. overflow:hidden
-     clips the zero-height rows' content instead of letting it bleed through. */
-  grid-template-rows: auto;
-  grid-auto-rows: 0;
-  /* gap applies between every row, including the collapsed ones — with
-     hundreds of files that's dozens of 0-height rows each still adding a
-     full row-gap, ballooning the container height even though nothing in
-     those rows is visible. Row spacing isn't needed when only one row
-     shows, so zero just that axis. */
-  row-gap: 0;
-  overflow: hidden;
-}
-
-.group-card-photo-grid-collapsed .group-card-photo-tile {
-  /* Grid items default to min-height:auto, which refuses to shrink below the
-     tile's own content size even inside a 0-height track — without this,
-     every row-2+ tile still renders a squashed sliver of its thumbnail
-     instead of actually collapsing to nothing. */
-  min-height: 0;
-  overflow: hidden;
 }
 
 .group-card-photo-tile {

@@ -1,5 +1,6 @@
-import { useCallback, useId, useState } from 'react'
+import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react'
 import { CaretRight, CaretDown } from '@phosphor-icons/react'
+import { motion, useReducedMotion } from 'motion/react'
 
 import type { PhotoGroup } from '../../../shared/types'
 
@@ -38,6 +39,9 @@ export function GroupCard({
   const [expanded, setExpanded] = useState(false)
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
   const renameInputId = useId()
+  const gridRef = useRef<HTMLDivElement>(null)
+  const [gridHeights, setGridHeights] = useState({ row: 0, full: 0 })
+  const shouldReduceMotion = useReducedMotion() ?? false
   const hasActiveSelection = selectedPaths.size > 0
   const isDraggingFromThisGroup = dragging?.groupId === group.id
   const isDraggingFromAnotherGroup = dragging !== null && !isDraggingFromThisGroup
@@ -93,6 +97,29 @@ export function GroupCard({
     setRenamingPath(null)
   }, [])
 
+  // Drives the collapse/expand animation below — the grid itself is never
+  // height-constrained, so scrollHeight always reports its true full height,
+  // and the first tile's own rendered height gives the "one row" target,
+  // both re-measured whenever the column count could change (file list edits
+  // or the card resizing).
+  useLayoutEffect(() => {
+    const el = gridRef.current
+    if (!el) return
+
+    function measure(): void {
+      const firstTile = el?.children[0] as HTMLElement | undefined
+      setGridHeights({
+        row: firstTile?.getBoundingClientRect().height ?? 0,
+        full: el?.scrollHeight ?? 0
+      })
+    }
+
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [group.files.length])
+
   return (
     <div
       className={`group-card${isGroupDropTarget ? ' group-card-drop-target' : ''}`}
@@ -144,35 +171,53 @@ export function GroupCard({
               : `${group.startDate?.slice(0, 10)} – ${group.endDate?.slice(0, 10)}`}
         </span>
       </div>
-      <div
-        className={`group-card-photo-grid${expanded ? ' group-card-photo-grid-expanded' : ' group-card-photo-grid-collapsed'}${hasActiveSelection ? ' group-card-selecting' : ''}`}
+      <motion.div
+        className="group-card-photo-grid-clip"
+        initial={false}
+        animate={{ height: expanded ? gridHeights.full : gridHeights.row }}
+        transition={
+          shouldReduceMotion ? { duration: 0.1 } : { type: 'spring', bounce: 0, duration: 0.35 }
+        }
+        style={
+          expanded
+            ? undefined
+            : {
+                maskImage: 'linear-gradient(to bottom, #000 calc(100% - 24px), transparent)',
+                WebkitMaskImage: 'linear-gradient(to bottom, #000 calc(100% - 24px), transparent)'
+              }
+        }
       >
-        {group.files.map((f, index) => (
-          <PhotoTile
-            key={f.path}
-            file={f}
-            groupId={group.id}
-            index={index}
-            selected={selectedPaths.has(f.path)}
-            isDragging={dragging?.path === f.path}
-            insertBefore={insertionIndex === index}
-            insertAfter={
-              insertionIndex === group.files.length - 1 && index === group.files.length - 1
-            }
-            isRenaming={renamingPath === f.path}
-            onToggleSelect={onToggleSelect}
-            onOpenViewer={onOpenViewer}
-            onRequestDelete={setDeletePath}
-            onStartRename={setRenamingPath}
-            onCommitRename={handleCommitRename}
-            onCancelRename={handleCancelRename}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-            onFileDragOver={handleFileDragOver}
-            onFileDrop={handleFileDrop}
-          />
-        ))}
-      </div>
+        <div
+          ref={gridRef}
+          className={`group-card-photo-grid${hasActiveSelection ? ' group-card-selecting' : ''}`}
+        >
+          {group.files.map((f, index) => (
+            <PhotoTile
+              key={f.path}
+              file={f}
+              groupId={group.id}
+              index={index}
+              selected={selectedPaths.has(f.path)}
+              isDragging={dragging?.path === f.path}
+              insertBefore={insertionIndex === index}
+              insertAfter={
+                insertionIndex === group.files.length - 1 && index === group.files.length - 1
+              }
+              isRenaming={renamingPath === f.path}
+              onToggleSelect={onToggleSelect}
+              onOpenViewer={onOpenViewer}
+              onRequestDelete={setDeletePath}
+              onStartRename={setRenamingPath}
+              onCommitRename={handleCommitRename}
+              onCancelRename={handleCancelRename}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              onFileDragOver={handleFileDragOver}
+              onFileDrop={handleFileDrop}
+            />
+          ))}
+        </div>
+      </motion.div>
       {deletePath && (
         <DeleteConfirmModal
           paths={[deletePath]}
