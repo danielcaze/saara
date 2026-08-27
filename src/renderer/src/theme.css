@@ -618,7 +618,9 @@ input[type='number'] {
   width: 100%;
   margin-top: var(--space-1);
   padding: 0;
-  border: none;
+  /* Transparent, not none — the rename input below reserves the same 1px so
+     swapping button->input doesn't add 2px of border and grow the tile. */
+  border: 1px solid transparent;
   background: none;
   color: inherit;
   font: inherit;

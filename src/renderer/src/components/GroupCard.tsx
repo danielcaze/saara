@@ -176,15 +176,15 @@ export function GroupCard({
         initial={false}
         animate={{ height: expanded ? gridHeights.full : gridHeights.row }}
         transition={
-          shouldReduceMotion ? { duration: 0.1 } : { type: 'spring', bounce: 0, duration: 0.35 }
-        }
-        style={
-          expanded
-            ? undefined
-            : {
-                maskImage: 'linear-gradient(to bottom, #000 calc(100% - 24px), transparent)',
-                WebkitMaskImage: 'linear-gradient(to bottom, #000 calc(100% - 24px), transparent)'
-              }
+          shouldReduceMotion
+            ? { duration: 0.1 }
+            : // Collapsed height is exactly one row, so there's nothing peeking
+              // out below it — a fade mask there only ate into row 1's own
+              // filenames. Opening also covers a much bigger distance than
+              // closing (one row -> the whole group), so it gets a longer
+              // response; a fixed duration for both reads as a harsh snap on
+              // the way open.
+              { type: 'spring', bounce: 0, duration: expanded ? 0.45 : 0.3 }
         }
       >
         <div
