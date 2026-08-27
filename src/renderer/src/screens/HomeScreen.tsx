@@ -290,6 +290,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
                   selectedPaths={state.selectedPaths}
                   onRename={(name) => renameGroup(g.id, name)}
                   onRenameFile={renameFile}
+                  onDelete={deleteFiles}
                   onToggleSelect={toggleSelect}
                   onOpenViewer={openViewer}
                   dragging={dragging}

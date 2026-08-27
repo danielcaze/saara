@@ -4,19 +4,21 @@ import {
   CaretDown,
   CheckSquare,
   DotsSixVertical,
-  PencilSimple,
-  Square
+  Square,
+  Trash
 } from '@phosphor-icons/react'
 
 import type { PhotoGroup } from '../../../shared/types'
 
 import { Thumbnail } from './Thumbnail'
+import { DeleteConfirmModal } from './DeleteConfirmModal'
 
 interface Props {
   group: PhotoGroup
   selectedPaths: Set<string>
   onRename: (name: string) => void
   onRenameFile: (path: string, fileName: string) => void
+  onDelete: (paths: string[]) => void
   onToggleSelect: (path: string) => void
   onOpenViewer: (path: string) => void
   dragging: { path: string; groupId: string } | null
@@ -31,6 +33,7 @@ export function GroupCard({
   selectedPaths,
   onRename,
   onRenameFile,
+  onDelete,
   onToggleSelect,
   onOpenViewer,
   dragging,
@@ -48,6 +51,7 @@ export function GroupCard({
   const isDraggingFromAnotherGroup = dragging !== null && !isDraggingFromThisGroup
   const [insertionIndex, setInsertionIndex] = useState<number | null>(null)
   const [isGroupDropTarget, setIsGroupDropTarget] = useState(false)
+  const [deletePath, setDeletePath] = useState<string | null>(null)
 
   function dragHandle(path: string, fileName: string): React.JSX.Element {
     return (
@@ -176,41 +180,45 @@ export function GroupCard({
               : `${group.startDate?.slice(0, 10)} – ${group.endDate?.slice(0, 10)}`}
         </span>
       </div>
-      <div className={`group-card-thumbs${hasActiveSelection ? ' group-card-selecting' : ''}`}>
-        {group.files.slice(0, 6).map((f, index) => (
+      <div
+        className={`group-card-photo-grid${expanded ? ' group-card-photo-grid-expanded' : ' group-card-photo-grid-collapsed'}${hasActiveSelection ? ' group-card-selecting' : ''}`}
+      >
+        {group.files.map((f, index) => (
           <div
             key={f.path}
-            className={`thumb-wrap${selectedPaths.has(f.path) ? ' thumb-wrap-selected' : ''}${dragging?.path === f.path ? ' thumb-wrap-dragging' : ''}${insertionIndex === index ? ' thumb-wrap-insert-before' : ''}${insertionIndex === group.files.length - 1 && index === group.files.length - 1 ? ' thumb-wrap-insert-after' : ''}`}
+            className={`group-card-photo-tile${selectedPaths.has(f.path) ? ' group-card-photo-tile-selected' : ''}${dragging?.path === f.path ? ' group-card-photo-tile-dragging' : ''}${insertionIndex === index ? ' group-card-photo-tile-insert-before' : ''}${insertionIndex === group.files.length - 1 && index === group.files.length - 1 ? ' group-card-photo-tile-insert-after' : ''}`}
             onDragOver={(event) => handleFileDragOver(index, event)}
             onDrop={(event) => handleFileDrop(index, event)}
           >
-            {dragHandle(f.path, f.fileName)}
-            {selectButton(f.path, f.fileName)}
-            <button
-              type="button"
-              className="thumb-open"
-              onClick={() => onOpenViewer(f.path)}
-              aria-label={`Open ${f.fileName}`}
-            >
-              <Thumbnail path={f.path} mediaType={f.mediaType} />
-            </button>
-          </div>
-        ))}
-      </div>
-      {expanded && (
-        <ul className="group-card-file-list">
-          {group.files.map((f, index) => (
-            <li
-              key={f.path}
-              className={`group-card-file-row${dragging?.path === f.path ? ' group-card-file-row-dragging' : ''}${insertionIndex === index ? ' group-card-file-row-insert-before' : ''}${insertionIndex === group.files.length - 1 && index === group.files.length - 1 ? ' group-card-file-row-insert-after' : ''}`}
-              onDragOver={(event) => handleFileDragOver(index, event)}
-              onDrop={(event) => handleFileDrop(index, event)}
-            >
+            <div className="group-card-photo-image">
               {dragHandle(f.path, f.fileName)}
               {selectButton(f.path, f.fileName)}
-              {renamingPath === f.path ? (
+              {expanded && (
+                <button
+                  type="button"
+                  className="icon-button group-card-photo-delete"
+                  aria-label={`Remove ${f.fileName} from this session`}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setDeletePath(f.path)
+                  }}
+                >
+                  <Trash size={16} aria-hidden="true" />
+                </button>
+              )}
+              <button
+                type="button"
+                className="thumb-open"
+                onClick={() => onOpenViewer(f.path)}
+                aria-label={`Open ${f.fileName}`}
+              >
+                <Thumbnail path={f.path} mediaType={f.mediaType} />
+              </button>
+            </div>
+            {expanded &&
+              (renamingPath === f.path ? (
                 <input
-                  className="field group-card-file-rename"
+                  className="field group-card-photo-rename"
                   autoFocus
                   aria-label={`Rename ${f.fileName}`}
                   value={renameValue}
@@ -224,23 +232,24 @@ export function GroupCard({
               ) : (
                 <button
                   type="button"
-                  className="group-card-file-name"
-                  onClick={() => onOpenViewer(f.path)}
+                  className="group-card-photo-name"
+                  onClick={() => startFileRename(f.path, f.fileName)}
                 >
                   {f.fileName} {f.metadataError ? `(error: ${f.metadataError})` : ''}
                 </button>
-              )}
-              <button
-                type="button"
-                className="icon-button group-card-file-rename-btn"
-                aria-label={`Rename ${f.fileName}`}
-                onClick={() => startFileRename(f.path, f.fileName)}
-              >
-                <PencilSimple size={16} aria-hidden="true" />
-              </button>
-            </li>
-          ))}
-        </ul>
+              ))}
+          </div>
+        ))}
+      </div>
+      {deletePath && (
+        <DeleteConfirmModal
+          paths={[deletePath]}
+          onConfirm={() => {
+            onDelete([deletePath])
+            setDeletePath(null)
+          }}
+          onCancel={() => setDeletePath(null)}
+        />
       )}
     </div>
   )
