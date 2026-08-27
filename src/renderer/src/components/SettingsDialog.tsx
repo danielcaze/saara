@@ -186,16 +186,18 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
           </div>
         )}
 
-        <a
-          className="settings-dialog-contact"
-          href="https://github.com/danielcaze/saara/issues/new"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Found a bug? Report it on GitHub <ArrowSquareOut size={16} aria-hidden="true" />
-        </a>
+        <div className="settings-dialog-footer">
+          <a
+            className="settings-dialog-contact"
+            href="https://github.com/danielcaze/saara/issues/new"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Found a bug? Report it on GitHub <ArrowSquareOut size={16} aria-hidden="true" />
+          </a>
 
-        {appVersion && <p className="settings-dialog-version">Saara v{appVersion}</p>}
+          {appVersion && <span className="settings-dialog-version">Saara v{appVersion}</span>}
+        </div>
 
         <div className="modal-actions">
           <button type="button" className="modal-secondary" onClick={onClose}>
