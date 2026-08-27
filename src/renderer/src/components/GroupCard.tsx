@@ -197,7 +197,7 @@ export function GroupCard({
                 <button
                   type="button"
                   className="icon-button group-card-photo-delete"
-                  aria-label={`Remove ${f.fileName} from this session`}
+                  aria-label={`Delete ${f.fileName}`}
                   onClick={(event) => {
                     event.stopPropagation()
                     setDeletePath(f.path)
