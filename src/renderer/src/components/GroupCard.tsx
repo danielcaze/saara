@@ -42,6 +42,10 @@ export function GroupCard({
   const gridRef = useRef<HTMLDivElement>(null)
   const measureGridRef = useRef<() => void>(() => {})
   const [gridHeights, setGridHeights] = useState({ row: 0, full: 0 })
+  // How many tiles sit in the first visual row — everything past this index
+  // gets `inert` while collapsed, below (see PhotoTile), so Tab can't reach
+  // a row that's only clipped out of view, not actually gone.
+  const [firstRowCount, setFirstRowCount] = useState(Infinity)
   // Starts false so the very first real measurement (0 -> actual height,
   // right after mount) snaps in instantly instead of springing up from 0 —
   // without this every group loads with its first row visibly growing into
@@ -123,14 +127,27 @@ export function GroupCard({
     if (!el) return
 
     function measure(): void {
-      const firstTile = el?.children[0] as HTMLElement | undefined
+      const children = Array.from(el?.children ?? []) as HTMLElement[]
+      const firstTile = children[0]
       // Safety margin on top of the ceil rounding — 4px still clipped the
-      // last row in devtools; 10px clears it without over-padding the row.
-      const BUFFER = 10
+      // last row in devtools; 7px clears it without over-padding the row.
+      const BUFFER = 7
+      // Measured from the grid's own top (not the tile's own height) so the
+      // grid's padding-top — reserved for row 1's focus-outline bleed room,
+      // see theme.css — counts as part of the collapsed row height instead
+      // of getting clipped off along with it.
+      const gridTop = el?.getBoundingClientRect().top ?? 0
+      const firstTileBottom = firstTile?.getBoundingClientRect().bottom ?? gridTop
       setGridHeights({
-        row: Math.ceil(firstTile?.getBoundingClientRect().height ?? 0) + BUFFER,
+        row: Math.ceil(firstTileBottom - gridTop) + BUFFER,
         full: Math.ceil(el?.scrollHeight ?? 0) + BUFFER
       })
+      const firstTop = firstTile?.getBoundingClientRect().top
+      setFirstRowCount(
+        firstTop === undefined
+          ? Infinity
+          : children.filter((c) => Math.abs(c.getBoundingClientRect().top - firstTop) < 1).length
+      )
     }
     measureGridRef.current = measure
 
@@ -200,6 +217,7 @@ export function GroupCard({
               : `${group.startDate?.slice(0, 10)} – ${group.endDate?.slice(0, 10)}`}
         </span>
       </div>
+      <div className="group-card-divider" />
       <motion.div
         className="group-card-photo-grid-clip"
         initial={false}
@@ -241,6 +259,7 @@ export function GroupCard({
                 insertionIndex === group.files.length - 1 && index === group.files.length - 1
               }
               isRenaming={renamingPath === f.path}
+              inert={!expanded && index >= firstRowCount}
               onToggleSelect={onToggleSelect}
               onOpenViewer={onOpenViewer}
               onRequestDelete={setDeletePath}
