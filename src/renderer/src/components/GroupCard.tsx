@@ -1,22 +1,15 @@
-import { useId, useState } from 'react'
-import {
-  CaretRight,
-  CaretDown,
-  CheckSquare,
-  DotsSixVertical,
-  Square,
-  Trash
-} from '@phosphor-icons/react'
+import { useCallback, useId, useState } from 'react'
+import { CaretRight, CaretDown } from '@phosphor-icons/react'
 
 import type { PhotoGroup } from '../../../shared/types'
 
-import { Thumbnail } from './Thumbnail'
+import { PhotoTile } from './PhotoTile'
 import { DeleteConfirmModal } from './DeleteConfirmModal'
 
 interface Props {
   group: PhotoGroup
   selectedPaths: Set<string>
-  onRename: (name: string) => void
+  onRename: (groupId: string, name: string) => void
   onRenameFile: (path: string, fileName: string) => void
   onDelete: (paths: string[]) => void
   onToggleSelect: (path: string) => void
@@ -44,7 +37,6 @@ export function GroupCard({
 }: Props): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
-  const [renameValue, setRenameValue] = useState('')
   const renameInputId = useId()
   const hasActiveSelection = selectedPaths.size > 0
   const isDraggingFromThisGroup = dragging?.groupId === group.id
@@ -53,81 +45,53 @@ export function GroupCard({
   const [isGroupDropTarget, setIsGroupDropTarget] = useState(false)
   const [deletePath, setDeletePath] = useState<string | null>(null)
 
-  function dragHandle(path: string, fileName: string): React.JSX.Element {
-    return (
-      <button
-        type="button"
-        className="drag-handle"
-        draggable
-        aria-label={`Drag ${fileName}`}
-        onDragStart={(event) => {
-          event.dataTransfer.effectAllowed = 'move'
-          event.dataTransfer.setData('text/plain', path)
-          onDragStart(path, group.id)
-        }}
-        onDragEnd={onDragEnd}
-      >
-        <DotsSixVertical size={16} aria-hidden="true" />
-      </button>
-    )
-  }
+  const dropIndexFor = useCallback(
+    (index: number, event: React.DragEvent<HTMLElement>): number => {
+      const bounds = event.currentTarget.getBoundingClientRect()
+      const after = event.clientX > bounds.left + bounds.width / 2
+      const rawIndex = index + (after ? 1 : 0)
+      const sourceIndex = group.files.findIndex((file) => file.path === dragging?.path)
+      return sourceIndex !== -1 && sourceIndex < rawIndex ? rawIndex - 1 : rawIndex
+    },
+    [group.files, dragging]
+  )
 
-  function dropIndexFor(index: number, event: React.DragEvent<HTMLElement>): number {
-    const bounds = event.currentTarget.getBoundingClientRect()
-    const after = event.clientX > bounds.left + bounds.width / 2
-    const rawIndex = index + (after ? 1 : 0)
-    const sourceIndex = group.files.findIndex((file) => file.path === dragging?.path)
-    return sourceIndex !== -1 && sourceIndex < rawIndex ? rawIndex - 1 : rawIndex
-  }
+  // Stable (only changes when the drag gesture itself starts/ends or this
+  // group's own files change) so PhotoTile's memoization holds across
+  // unrelated re-renders — see PhotoTile.tsx.
+  const handleFileDragOver = useCallback(
+    (index: number, event: React.DragEvent<HTMLElement>): void => {
+      if (!isDraggingFromThisGroup) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+      setInsertionIndex(dropIndexFor(index, event))
+    },
+    [isDraggingFromThisGroup, dropIndexFor]
+  )
 
-  function handleFileDragOver(index: number, event: React.DragEvent<HTMLElement>): void {
-    if (!isDraggingFromThisGroup) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    setInsertionIndex(dropIndexFor(index, event))
-  }
+  const handleFileDrop = useCallback(
+    (index: number, event: React.DragEvent<HTMLElement>): void => {
+      if (!isDraggingFromThisGroup || !dragging) return
+      event.preventDefault()
+      event.stopPropagation()
+      onReorder(group.id, dragging.path, dropIndexFor(index, event))
+      setInsertionIndex(null)
+    },
+    [isDraggingFromThisGroup, dragging, dropIndexFor, group.id, onReorder]
+  )
 
-  function handleFileDrop(index: number, event: React.DragEvent<HTMLElement>): void {
-    if (!isDraggingFromThisGroup || !dragging) return
-    event.preventDefault()
-    event.stopPropagation()
-    onReorder(group.id, dragging.path, dropIndexFor(index, event))
-    setInsertionIndex(null)
-  }
+  const handleCommitRename = useCallback(
+    (path: string, value: string): void => {
+      const trimmed = value.trim()
+      if (trimmed) onRenameFile(path, trimmed)
+      setRenamingPath(null)
+    },
+    [onRenameFile]
+  )
 
-  function selectButton(path: string, fileName: string): React.JSX.Element {
-    const selected = selectedPaths.has(path)
-
-    return (
-      <button
-        type="button"
-        className="thumb-select"
-        aria-pressed={selected}
-        aria-label={selected ? `Deselect ${fileName}` : `Select ${fileName}`}
-        onClick={(e) => {
-          e.stopPropagation()
-          onToggleSelect(path)
-        }}
-      >
-        {selected ? (
-          <CheckSquare size={16} weight="fill" aria-hidden="true" />
-        ) : (
-          <Square size={16} aria-hidden="true" />
-        )}
-      </button>
-    )
-  }
-
-  function startFileRename(path: string, fileName: string): void {
-    setRenameValue(fileName)
-    setRenamingPath(path)
-  }
-
-  function commitFileRename(path: string): void {
-    const trimmed = renameValue.trim()
-    if (trimmed) onRenameFile(path, trimmed)
+  const handleCancelRename = useCallback((): void => {
     setRenamingPath(null)
-  }
+  }, [])
 
   return (
     <div
@@ -169,7 +133,7 @@ export function GroupCard({
           id={renameInputId}
           className="field"
           value={group.name}
-          onChange={(e) => onRename(e.target.value)}
+          onChange={(e) => onRename(group.id, e.target.value)}
         />
         <span className="tabular-nums">{group.files.length} files</span>
         <span className="tabular-nums">
@@ -184,61 +148,29 @@ export function GroupCard({
         className={`group-card-photo-grid${expanded ? ' group-card-photo-grid-expanded' : ' group-card-photo-grid-collapsed'}${hasActiveSelection ? ' group-card-selecting' : ''}`}
       >
         {group.files.map((f, index) => (
-          <div
+          <PhotoTile
             key={f.path}
-            className={`group-card-photo-tile${selectedPaths.has(f.path) ? ' group-card-photo-tile-selected' : ''}${dragging?.path === f.path ? ' group-card-photo-tile-dragging' : ''}${insertionIndex === index ? ' group-card-photo-tile-insert-before' : ''}${insertionIndex === group.files.length - 1 && index === group.files.length - 1 ? ' group-card-photo-tile-insert-after' : ''}`}
-            onDragOver={(event) => handleFileDragOver(index, event)}
-            onDrop={(event) => handleFileDrop(index, event)}
-          >
-            <div className="group-card-photo-image">
-              {dragHandle(f.path, f.fileName)}
-              {selectButton(f.path, f.fileName)}
-              {expanded && (
-                <button
-                  type="button"
-                  className="icon-button group-card-photo-delete"
-                  aria-label={`Delete ${f.fileName}`}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    setDeletePath(f.path)
-                  }}
-                >
-                  <Trash size={16} aria-hidden="true" />
-                </button>
-              )}
-              <button
-                type="button"
-                className="thumb-open"
-                onClick={() => onOpenViewer(f.path)}
-                aria-label={`Open ${f.fileName}`}
-              >
-                <Thumbnail path={f.path} mediaType={f.mediaType} />
-              </button>
-            </div>
-            {expanded &&
-              (renamingPath === f.path ? (
-                <input
-                  className="field group-card-photo-rename"
-                  autoFocus
-                  aria-label={`Rename ${f.fileName}`}
-                  value={renameValue}
-                  onChange={(event) => setRenameValue(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') commitFileRename(f.path)
-                    if (event.key === 'Escape') setRenamingPath(null)
-                  }}
-                  onBlur={() => commitFileRename(f.path)}
-                />
-              ) : (
-                <button
-                  type="button"
-                  className="group-card-photo-name"
-                  onClick={() => startFileRename(f.path, f.fileName)}
-                >
-                  {f.fileName} {f.metadataError ? `(error: ${f.metadataError})` : ''}
-                </button>
-              ))}
-          </div>
+            file={f}
+            groupId={group.id}
+            index={index}
+            selected={selectedPaths.has(f.path)}
+            isDragging={dragging?.path === f.path}
+            insertBefore={insertionIndex === index}
+            insertAfter={
+              insertionIndex === group.files.length - 1 && index === group.files.length - 1
+            }
+            isRenaming={renamingPath === f.path}
+            onToggleSelect={onToggleSelect}
+            onOpenViewer={onOpenViewer}
+            onRequestDelete={setDeletePath}
+            onStartRename={setRenamingPath}
+            onCommitRename={handleCommitRename}
+            onCancelRename={handleCancelRename}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onFileDragOver={handleFileDragOver}
+            onFileDrop={handleFileDrop}
+          />
         ))}
       </div>
       {deletePath && (

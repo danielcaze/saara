@@ -36,14 +36,28 @@ function mediaUrl(filePath: string): string {
   return `saara-media://media/?path=${encodeURIComponent(filePath)}`
 }
 
+// MediaError.code is a small int with no message of its own — this maps it
+// to the actual reason, since "couldn't play" alone gives no way to tell a
+// codec/container Chromium can't decode (expected, e.g. most .MOV files)
+// apart from a real bug in the saara-media:// streaming protocol (e.g. a
+// range-request or content-type mistake) that happens to also render as a
+// playback failure.
+const MEDIA_ERROR_MESSAGES: Record<number, string> = {
+  1: 'Loading was aborted.',
+  2: 'A network error occurred while loading.',
+  3: 'The video is corrupted or uses an unsupported encoding.',
+  4: 'This container or codec isn’t supported by this app.'
+}
+
 function VideoPlayer({ path, fileName }: { path: string; fileName: string }): React.JSX.Element {
   const [ready, setReady] = useState(false)
-  const [failed, setFailed] = useState(false)
+  const [errorDetail, setErrorDetail] = useState<string | null>(null)
 
-  if (failed) {
+  if (errorDetail) {
     return (
       <div className="lightbox-video-placeholder">
         <span>Couldn&apos;t play {fileName} in this app.</span>
+        <span className="lightbox-video-error-detail">{errorDetail}</span>
       </div>
     )
   }
@@ -57,7 +71,14 @@ function VideoPlayer({ path, fileName }: { path: string; fileName: string }): Re
         aria-label={`Play ${fileName}`}
         src={mediaUrl(path)}
         onLoadedData={() => setReady(true)}
-        onError={() => setFailed(true)}
+        onError={(event) => {
+          const error = event.currentTarget.error
+          const detail = error
+            ? (MEDIA_ERROR_MESSAGES[error.code] ?? `Unknown error (code ${error.code}).`)
+            : 'Unknown error.'
+          console.error(`[saara] video playback failed for ${path}:`, error?.code, error?.message)
+          setErrorDetail(detail)
+        }}
       />
       {!ready && <span className="lightbox-video-loading">Loading video…</span>}
     </div>

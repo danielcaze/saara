@@ -1,5 +1,5 @@
 // src/renderer/src/screens/HomeScreen.tsx
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   FolderOpen,
@@ -154,10 +154,39 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     return () => cancelAnimationFrame(frameId)
   }, [dragging])
 
-  function endDrag(): void {
+  const endDrag = useCallback((): void => {
     dragPointerY.current = null
     setDragging(null)
-  }
+  }, [])
+
+  // Stable across renders so GroupCard/PhotoTile's memoization actually
+  // takes effect instead of re-rendering every group on every render.
+  const handleDragStart = useCallback((path: string, groupId: string): void => {
+    setDragging({ path, groupId })
+  }, [])
+
+  const handleMoveToGroup = useCallback(
+    (path: string, groupId: string): void => {
+      moveFiles([path], groupId)
+      endDrag()
+    },
+    [moveFiles, endDrag]
+  )
+
+  const handleReorder = useCallback(
+    (groupId: string, path: string, targetIndex: number): void => {
+      reorderFiles(groupId, path, targetIndex)
+      endDrag()
+    },
+    [reorderFiles, endDrag]
+  )
+
+  const handleRenameGroup = useCallback(
+    (groupId: string, name: string): void => {
+      renameGroup(groupId, name)
+    },
+    [renameGroup]
+  )
 
   const destinationReady = isDrive ? state.driveStatus.connected : !!state.destinationPath
 
@@ -307,22 +336,16 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
                   key={g.id}
                   group={g}
                   selectedPaths={state.selectedPaths}
-                  onRename={(name) => renameGroup(g.id, name)}
+                  onRename={handleRenameGroup}
                   onRenameFile={renameFile}
                   onDelete={deleteFiles}
                   onToggleSelect={toggleSelect}
                   onOpenViewer={openViewer}
                   dragging={dragging}
-                  onDragStart={(path, groupId) => setDragging({ path, groupId })}
+                  onDragStart={handleDragStart}
                   onDragEnd={endDrag}
-                  onMoveToGroup={(path, groupId) => {
-                    moveFiles([path], groupId)
-                    endDrag()
-                  }}
-                  onReorder={(groupId, path, targetIndex) => {
-                    reorderFiles(groupId, path, targetIndex)
-                    endDrag()
-                  }}
+                  onMoveToGroup={handleMoveToGroup}
+                  onReorder={handleReorder}
                 />
               ))}
               {dragging && (
