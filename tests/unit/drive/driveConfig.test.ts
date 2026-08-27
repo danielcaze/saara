@@ -7,16 +7,17 @@ describe('getDriveOAuthConfig', () => {
   })
 
   it('returns null when only the client ID is set', () => {
-    expect(getDriveOAuthConfig({ GOOGLE_DRIVE_CLIENT_ID: 'abc' })).toBeNull()
+    expect(getDriveOAuthConfig({ clientId: 'abc' })).toBeNull()
   })
 
   it('returns null when only the client secret is set', () => {
-    expect(getDriveOAuthConfig({ GOOGLE_DRIVE_CLIENT_SECRET: 'xyz' })).toBeNull()
+    expect(getDriveOAuthConfig({ clientSecret: 'xyz' })).toBeNull()
   })
 
   it('returns the config when both are set', () => {
-    expect(
-      getDriveOAuthConfig({ GOOGLE_DRIVE_CLIENT_ID: 'abc', GOOGLE_DRIVE_CLIENT_SECRET: 'xyz' })
-    ).toEqual({ clientId: 'abc', clientSecret: 'xyz' })
+    expect(getDriveOAuthConfig({ clientId: 'abc', clientSecret: 'xyz' })).toEqual({
+      clientId: 'abc',
+      clientSecret: 'xyz'
+    })
   })
 })
