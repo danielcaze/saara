@@ -251,6 +251,25 @@ describe('reducer: CREATE_GROUP and MOVE_FILES', () => {
     ])
   })
 
+  it('MOVE_FILE_TO_INDEX moves a file exactly once at the requested target index', () => {
+    const state = stateWithGroups([
+      group('g1', [file('/a.jpg'), file('/b.jpg')]),
+      group('g2', [file('/c.jpg'), file('/d.jpg')])
+    ])
+    const next = reducer(state, {
+      type: 'MOVE_FILE_TO_INDEX',
+      path: '/a.jpg',
+      targetGroupId: 'g2',
+      targetIndex: 1
+    })
+
+    expect(next.groups[0].files.map((entry) => entry.path)).toEqual(['/b.jpg'])
+    expect(next.groups[1].files.map((entry) => entry.path)).toEqual(['/c.jpg', '/a.jpg', '/d.jpg'])
+    expect(
+      flattenGroupFiles(next.groups).filter(({ file }) => file.path === '/a.jpg')
+    ).toHaveLength(1)
+  })
+
   it('drops the source group once it is emptied by the move', () => {
     const state = stateWithGroups([group('g1', [file('/a.jpg')]), group('g2', [file('/b.jpg')])])
     const next = reducer(state, { type: 'MOVE_FILES', paths: ['/a.jpg'], targetGroupId: 'g2' })

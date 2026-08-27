@@ -63,7 +63,9 @@ const standardDialogAnimation = {
   transition: { type: 'spring' as const, bounce: 0, duration: 0.35 }
 }
 
-function dialogAnimation(reduceMotion: boolean) {
+function dialogAnimation(
+  reduceMotion: boolean
+): typeof reducedDialogAnimation | typeof standardDialogAnimation {
   return reduceMotion ? reducedDialogAnimation : standardDialogAnimation
 }
 
@@ -77,7 +79,14 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
   const previouslyFocused = useRef<HTMLElement | null>(null)
   const reduceMotion = useReducedMotion()
   const shouldReduceMotion = reduceMotion ?? false
-  const { rawValue, error, handleChange, handleSave } = useThresholdSettings(workflow, onClose)
+  const {
+    rawValue,
+    error,
+    prefixCopiedFileNames,
+    handleChange,
+    handlePrefixCopiedFileNamesChange,
+    handleSave
+  } = useThresholdSettings(workflow, onClose)
   const animation = dialogAnimation(shouldReduceMotion)
   const [disconnecting, setDisconnecting] = useState(false)
   const [appVersion, setAppVersion] = useState('')
@@ -138,7 +147,7 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
         <div className="settings-dialog-header">
           <div>
             <h2 id="settings-dialog-title">Settings</h2>
-            <p>Choose how far apart photos can be before Saara makes a new group.</p>
+            <p>Set how Saara groups photos and saves local copies.</p>
           </div>
           <button
             type="button"
@@ -165,6 +174,22 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
             <span className="field-value">hours</span>
           </div>
           {error && <p className="field-error">{error}</p>}
+        </div>
+
+        <div className="settings-dialog-field">
+          <label htmlFor="prefix-copied-file-names">Local file order</label>
+          <label className="settings-dialog-checkbox" htmlFor="prefix-copied-file-names">
+            <input
+              id="prefix-copied-file-names"
+              type="checkbox"
+              checked={prefixCopiedFileNames}
+              onChange={(event) => handlePrefixCopiedFileNamesChange(event.target.checked)}
+            />
+            Prefix copied filenames with their order in Saara
+          </label>
+          <p className="field-value">
+            Example: 0001_IMG_0001.JPG. Google Drive filenames stay unchanged.
+          </p>
         </div>
 
         {driveStatus.connected && (

@@ -43,10 +43,10 @@ function mediaUrl(filePath: string): string {
 // range-request or content-type mistake) that happens to also render as a
 // playback failure.
 const MEDIA_ERROR_MESSAGES: Record<number, string> = {
-  1: 'Loading was aborted.',
-  2: 'A network error occurred while loading.',
-  3: 'The video is corrupted or uses an unsupported encoding.',
-  4: 'This container or codec isn’t supported by this app.'
+  1: 'Video loading was canceled.',
+  2: 'Saara could not load this video.',
+  3: 'This video is corrupted or uses an unsupported encoding.',
+  4: 'Saara does not support that type of media yet.'
 }
 
 function VideoPlayer({ path, fileName }: { path: string; fileName: string }): React.JSX.Element {
@@ -56,7 +56,7 @@ function VideoPlayer({ path, fileName }: { path: string; fileName: string }): Re
   if (errorDetail) {
     return (
       <div className="lightbox-video-placeholder">
-        <span>Couldn&apos;t play {fileName} in this app.</span>
+        <span>Can&apos;t play {fileName}.</span>
         <span className="lightbox-video-error-detail">{errorDetail}</span>
       </div>
     )
@@ -76,7 +76,7 @@ function VideoPlayer({ path, fileName }: { path: string; fileName: string }): Re
           const detail = error
             ? (MEDIA_ERROR_MESSAGES[error.code] ?? `Unknown error (code ${error.code}).`)
             : 'Unknown error.'
-          console.error(`[saara] video playback failed for ${path}:`, error?.code, error?.message)
+          console.error(`[saara] video playback failed for ${path}:`, detail)
           setErrorDetail(detail)
         }}
       />

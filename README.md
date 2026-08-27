@@ -12,6 +12,12 @@ A desktop app that imports photos from an SD card, automatically groups them int
 - **Resumable, pausable Drive uploads** — a dropped connection pauses and resumes automatically; re-running a session skips files already uploaded instead of duplicating them.
 - **Never overwrites** — existing files at the destination are always preserved; conflicts get a suffixed name instead of clobbering anything.
 
+## Keeping your order
+
+Every local group folder Saara creates includes a small `.saara.json` file. It remembers that group’s name and photo order. When you later choose the exported folder as a source, Saara finds these files and restores the groups and order automatically. If no `.saara.json` files are present, Saara simply groups the files by date as usual.
+
+If you also want the order to be clear in Finder or Explorer, turn on **Prefix copied filenames with their order in Saara** in Settings. Local copies will then use names such as `0001_IMG_0001.JPG`. Files uploaded to Google Drive keep their original names.
+
 ## Setup
 
 ### Install dependencies

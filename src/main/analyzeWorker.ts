@@ -6,14 +6,19 @@
 // thread means the main thread's event loop is never contended by this work,
 // regardless of how slow or large a given folder turns out to be.
 import { parentPort, workerData } from 'node:worker_threads'
-import { analyzeSource, getCachedMetadata } from './importSession'
+import { analyzeSource, getCachedMetadata, getCachedOrderManifest } from './importSession'
 import { shutdownExiftool } from './metadata/exiftoolClient'
-import type { AnalyzeProgress, PhotoGroup } from '../shared/types'
+import type { AnalyzeProgress, LocalOrderManifestGroup, PhotoGroup } from '../shared/types'
 import type { ExtractedMetadata } from './metadata/extractMetadata'
 
 export type AnalyzeWorkerMessage =
   | { type: 'progress'; progress: AnalyzeProgress }
-  | { type: 'done'; groups: PhotoGroup[]; metadata: ExtractedMetadata[] }
+  | {
+      type: 'done'
+      groups: PhotoGroup[]
+      metadata: ExtractedMetadata[]
+      orderManifest: LocalOrderManifestGroup[] | null
+    }
   | { type: 'error'; message: string }
 
 async function run(): Promise<void> {
@@ -28,7 +33,8 @@ async function run(): Promise<void> {
     parentPort.postMessage({
       type: 'done',
       groups,
-      metadata: getCachedMetadata()
+      metadata: getCachedMetadata(),
+      orderManifest: getCachedOrderManifest()
     } satisfies AnalyzeWorkerMessage)
   } catch (err) {
     parentPort.postMessage({

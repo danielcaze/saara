@@ -1,6 +1,6 @@
 {
   "name": "saara",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "description": "Desktop app that imports photos from an SD card, groups them into events, and copies or uploads each group to a local folder or Google Drive.",
   "main": "./out/main/index.js",
   "author": "Daniel Cazé <danielcazedev@gmail.com>",
@@ -33,6 +33,9 @@
     "build:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
+    "@dnd-kit/collision": "~0.5.0",
+    "@dnd-kit/dom": "~0.5.0",
+    "@dnd-kit/react": "~0.5.0",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@phosphor-icons/react": "^2.1.10",

@@ -39,8 +39,12 @@ const saaraAPI = {
   getLightboxPreview: (path: string, mediaType: MediaType): Promise<{ dataUrl: string } | null> =>
     ipcRenderer.invoke(IPC.GET_LIGHTBOX_PREVIEW, { path, mediaType }),
 
-  copyStart: (destinationRoot: string, groups: CopyPlanGroup[]): Promise<CopySummary> =>
-    ipcRenderer.invoke(IPC.COPY_START, { destinationRoot, groups }),
+  copyStart: (
+    destinationRoot: string,
+    groups: CopyPlanGroup[],
+    prefixFileNames: boolean
+  ): Promise<CopySummary> =>
+    ipcRenderer.invoke(IPC.COPY_START, { destinationRoot, groups, prefixFileNames }),
 
   onCopyProgress: (cb: (p: CopyProgressEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, p: CopyProgressEvent): void => cb(p)

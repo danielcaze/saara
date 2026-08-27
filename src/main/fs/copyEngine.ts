@@ -1,11 +1,13 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { sanitizeFolderName } from './sanitizeFolderName'
+import { writeOrderManifest } from './orderManifest'
 import type { CopyPlanGroup, CopyProgressEvent, CopySummary } from '../../shared/types'
 
 export interface CopyPlan {
   destinationRoot: string
   groups: CopyPlanGroup[]
+  prefixFileNames?: boolean
 }
 
 const CONCURRENCY = 4
@@ -63,16 +65,21 @@ async function copyOne(
   return { resolvedName: finalName, conflict: wasConflict }
 }
 
+function orderedFileName(fileName: string, index: number, total: number): string {
+  const width = Math.max(4, String(total).length)
+  return `${String(index + 1).padStart(width, '0')}_${fileName}`
+}
+
 async function runPool<T>(
   items: T[],
   concurrency: number,
-  worker: (item: T) => Promise<void>
+  worker: (item: T, index: number) => Promise<void>
 ): Promise<void> {
   let index = 0
   async function next(): Promise<void> {
     const current = index++
     if (current >= items.length) return
-    await worker(items[current])
+    await worker(items[current], current)
     await next()
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => next()))
@@ -93,24 +100,29 @@ export async function runCopyPlan(
   let copiedSoFar = 0
   const totalFiles = plan.groups.reduce((sum, g) => sum + g.files.length, 0)
 
-  for (const group of plan.groups) {
+  for (const [groupOrder, group] of plan.groups.entries()) {
     const folderName = uniqueFolderPath(sanitizeFolderName(group.name), takenFolderNames)
     const destDir = path.join(plan.destinationRoot, folderName)
     await fs.mkdir(destDir, { recursive: true })
     const existingNames = new Set(await fs.readdir(destDir))
+    const copiedNames = new Array<string | null>(group.files.length).fill(null)
 
-    await runPool(group.files, CONCURRENCY, async (file) => {
+    await runPool(group.files, CONCURRENCY, async (file, index) => {
       summary.totalFiles++
       try {
+        const requestedName = plan.prefixFileNames
+          ? orderedFileName(file.fileName, index, group.files.length)
+          : file.fileName
         const { resolvedName, conflict } = await copyOne(
           file.sourcePath,
           destDir,
-          file.fileName,
+          requestedName,
           existingNames
         )
+        copiedNames[index] = resolvedName
         summary.copiedFiles++
         if (conflict) {
-          summary.conflicts.push({ originalName: file.fileName, resolvedName })
+          summary.conflicts.push({ originalName: requestedName, resolvedName })
         }
       } catch (err) {
         summary.errors.push({
@@ -127,6 +139,13 @@ export async function runCopyPlan(
           totalFiles
         })
       }
+    })
+    await writeOrderManifest(destDir, {
+      id: group.id,
+      name: group.name,
+      groupOrder,
+      folderName,
+      files: copiedNames.filter((name): name is string => name !== null)
     })
   }
 

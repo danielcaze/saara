@@ -17,17 +17,26 @@ export function useThresholdSettings(
 ): {
   rawValue: string
   error: string | null
+  prefixCopiedFileNames: boolean
   handleChange: (rawInput: string) => void
+  handlePrefixCopiedFileNamesChange: (enabled: boolean) => void
   handleSave: () => Promise<void>
 } {
   const [rawValue, setRawValue] = useState(String(workflow.state.thresholdHours))
   const [error, setError] = useState<string | null>(null)
+  const [prefixCopiedFileNames, setPrefixCopiedFileNames] = useState(
+    workflow.state.prefixCopiedFileNames
+  )
 
   function handleChange(rawInput: string): void {
     const value = rawInput.slice(0, 3)
     setRawValue(value)
     const result = validateThresholdInput(value)
     setError(result.ok ? null : result.message)
+  }
+
+  function handlePrefixCopiedFileNamesChange(enabled: boolean): void {
+    setPrefixCopiedFileNames(enabled)
   }
 
   async function handleSave(): Promise<void> {
@@ -37,10 +46,18 @@ export function useThresholdSettings(
       return
     }
     const thresholdHours = Number(rawValue)
-    await window.saaraAPI.setSettings({ thresholdHours })
+    await window.saaraAPI.setSettings({ thresholdHours, prefixCopiedFileNames })
+    workflow.setPrefixCopiedFileNames(prefixCopiedFileNames)
     await workflow.recluster(thresholdHours)
     onSaved()
   }
 
-  return { rawValue, error, handleChange, handleSave }
+  return {
+    rawValue,
+    error,
+    prefixCopiedFileNames,
+    handleChange,
+    handlePrefixCopiedFileNamesChange,
+    handleSave
+  }
 }

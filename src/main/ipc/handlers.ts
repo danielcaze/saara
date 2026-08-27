@@ -101,8 +101,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   })
 
   ipcMain.handle(IPC.COPY_START, async (_event, payload) => {
-    const { destinationRoot, groups } = copyStartRequestSchema.parse(payload)
-    return runCopyPlan({ destinationRoot, groups }, (progress) => {
+    const { destinationRoot, groups, prefixFileNames } = copyStartRequestSchema.parse(payload)
+    return runCopyPlan({ destinationRoot, groups, prefixFileNames }, (progress) => {
       const win = getWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send(IPC.COPY_PROGRESS, progress)

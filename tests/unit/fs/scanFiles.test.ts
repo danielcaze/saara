@@ -14,7 +14,7 @@ afterEach(async () => {
   await fs.rm(tmpDir, { recursive: true, force: true })
 })
 
-async function touch(relPath: string) {
+async function touch(relPath: string): Promise<void> {
   const full = path.join(tmpDir, relPath)
   await fs.mkdir(path.dirname(full), { recursive: true })
   await fs.writeFile(full, 'x')

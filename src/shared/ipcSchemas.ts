@@ -34,7 +34,8 @@ const copyPlanGroupSchema = z.object({
 
 export const copyStartRequestSchema = z.object({
   destinationRoot: z.string().min(1),
-  groups: z.array(copyPlanGroupSchema)
+  groups: z.array(copyPlanGroupSchema),
+  prefixFileNames: z.boolean().default(false)
 })
 
 export const openPathRequestSchema = z.object({

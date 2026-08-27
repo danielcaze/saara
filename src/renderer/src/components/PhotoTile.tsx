@@ -1,30 +1,34 @@
-import { memo, useState } from 'react'
-import { CheckSquare, DotsSixVertical, PencilSimple, Square, Trash } from '@phosphor-icons/react'
+import { memo, type RefObject, useCallback, useState } from 'react'
+import { CheckSquare, PencilSimple, Square, Trash } from '@phosphor-icons/react'
+import { defaultCollisionDetection, type CollisionDetector } from '@dnd-kit/collision'
+import { SortableKeyboardPlugin } from '@dnd-kit/dom/sortable'
+import { useSortable } from '@dnd-kit/react/sortable'
 
 import type { FileMeta } from '../../../shared/types'
 
 import { Thumbnail } from './Thumbnail'
+
+// dnd-kit's OptimisticSortingPlugin physically reorders DOM nodes while a
+// pointer drag is active. React owns this grid, so that mutation corrupts its
+// child bookkeeping when a cross-group drop later re-parents a tile.
+const sortablePlugins = [SortableKeyboardPlugin]
 
 interface Props {
   file: FileMeta
   groupId: string
   index: number
   selected: boolean
-  isDragging: boolean
-  insertBefore: boolean
-  insertAfter: boolean
   isRenaming: boolean
   inert: boolean
+  dropPreviewSide: 'before' | 'after' | null
+  isCollapsed: boolean
+  closedClipRef: RefObject<HTMLDivElement | null>
   onToggleSelect: (path: string) => void
   onOpenViewer: (path: string) => void
   onRequestDelete: (path: string) => void
   onStartRename: (path: string) => void
   onCommitRename: (path: string, value: string) => void
   onCancelRename: () => void
-  onDragStart: (path: string, groupId: string) => void
-  onDragEnd: () => void
-  onFileDragOver: (index: number, event: React.DragEvent<HTMLElement>) => void
-  onFileDrop: (index: number, event: React.DragEvent<HTMLElement>) => void
 }
 
 // Memoized so a click that only changes selection/rename state for ONE tile
@@ -39,23 +43,44 @@ function PhotoTileImpl({
   groupId,
   index,
   selected,
-  isDragging,
-  insertBefore,
-  insertAfter,
   isRenaming,
   inert,
+  dropPreviewSide,
+  isCollapsed,
+  closedClipRef,
   onToggleSelect,
   onOpenViewer,
   onRequestDelete,
   onStartRename,
   onCommitRename,
-  onCancelRename,
-  onDragStart,
-  onDragEnd,
-  onFileDragOver,
-  onFileDrop
+  onCancelRename
 }: Props): React.JSX.Element {
   const [renameValue, setRenameValue] = useState(file.fileName)
+  const collisionDetector = useCallback<CollisionDetector>(
+    (input) => {
+      const clip = closedClipRef.current
+      const tile = (input.droppable as { element?: Element }).element
+      if (isCollapsed && clip && tile) {
+        const clipBounds = clip.getBoundingClientRect()
+        const tileBounds = tile.getBoundingClientRect()
+        if (tileBounds.bottom <= clipBounds.top || tileBounds.top >= clipBounds.bottom) return null
+      }
+      return defaultCollisionDetection(input)
+    },
+    [closedClipRef, isCollapsed]
+  )
+  const sortable = useSortable({
+    id: file.path,
+    index,
+    group: groupId,
+    type: 'photo',
+    accept: 'photo',
+    plugins: sortablePlugins,
+    data: { groupId, index, path: file.path },
+    collisionDetector,
+    transition: { duration: 220, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' }
+  })
+  const { handleRef: setDragHandle, isDragging, ref: setSortableNode } = sortable
 
   function beginRename(): void {
     setRenameValue(file.fileName)
@@ -64,30 +89,16 @@ function PhotoTileImpl({
 
   return (
     <div
-      className={`group-card-photo-tile${selected ? ' group-card-photo-tile-selected' : ''}${isDragging ? ' group-card-photo-tile-dragging' : ''}${insertBefore ? ' group-card-photo-tile-insert-before' : ''}${insertAfter ? ' group-card-photo-tile-insert-after' : ''}`}
+      ref={setSortableNode}
+      className={`group-card-photo-tile${selected ? ' group-card-photo-tile-selected' : ''}${isDragging ? ' group-card-photo-tile-dragging' : ''}${dropPreviewSide ? ` group-card-photo-tile-drop-preview-${dropPreviewSide}` : ''}`}
+      data-path={file.path}
       // Collapsed rows past the first are still in the DOM (height-clipped,
       // not removed) so the collapse animation has real content to grow
       // from — inert pulls them out of tab order so Tab can't walk into a
       // row the user can't see.
       inert={inert || undefined}
-      onDragOver={(event) => onFileDragOver(index, event)}
-      onDrop={(event) => onFileDrop(index, event)}
     >
       <div className="group-card-photo-image">
-        <button
-          type="button"
-          className="drag-handle"
-          draggable
-          aria-label={`Drag ${file.fileName}`}
-          onDragStart={(event) => {
-            event.dataTransfer.effectAllowed = 'move'
-            event.dataTransfer.setData('text/plain', file.path)
-            onDragStart(file.path, groupId)
-          }}
-          onDragEnd={onDragEnd}
-        >
-          <DotsSixVertical size={16} aria-hidden="true" />
-        </button>
         <button
           type="button"
           className="thumb-select"
@@ -118,6 +129,7 @@ function PhotoTileImpl({
         <button
           type="button"
           className="thumb-open"
+          ref={setDragHandle}
           onClick={() => onOpenViewer(file.path)}
           aria-label={`Open ${file.fileName}`}
         >

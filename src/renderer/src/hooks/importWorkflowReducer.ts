@@ -43,6 +43,7 @@ export interface State {
   driveConnecting: boolean
   driveError: string | null
   thresholdHours: number
+  prefixCopiedFileNames: boolean
   analyzeProgress: AnalyzeProgress | null
   analyzeError: string | null
   groups: PhotoGroup[]
@@ -65,6 +66,7 @@ export type Action =
   | { type: 'DRIVE_CONNECT_ERROR'; message: string }
   | { type: 'DRIVE_DISCONNECTED' }
   | { type: 'SET_THRESHOLD_HOURS'; hours: number }
+  | { type: 'SET_PREFIX_COPIED_FILE_NAMES'; enabled: boolean }
   | { type: 'ANALYZE_PROGRESS'; progress: AnalyzeProgress }
   | { type: 'ANALYZE_DONE'; groups: PhotoGroup[] }
   | { type: 'ANALYZE_ERROR'; message: string }
@@ -82,6 +84,7 @@ export type Action =
   | { type: 'DELETE_FILES'; paths: string[] }
   | { type: 'CREATE_GROUP'; groupId: string; name?: string }
   | { type: 'MOVE_FILES'; paths: string[]; targetGroupId: string }
+  | { type: 'MOVE_FILE_TO_INDEX'; path: string; targetGroupId: string; targetIndex: number }
   | { type: 'REORDER_FILES'; groupId: string; path: string; targetIndex: number }
   | { type: 'RENAME_FILE'; path: string; fileName: string }
 
@@ -93,6 +96,7 @@ export const initialState: State = {
   driveConnecting: false,
   driveError: null,
   thresholdHours: 24,
+  prefixCopiedFileNames: false,
   analyzeProgress: null,
   analyzeError: null,
   groups: [],
@@ -231,6 +235,8 @@ export function reducer(state: State, action: Action): State {
       return { ...state, driveStatus: { connected: false, email: null } }
     case 'SET_THRESHOLD_HOURS':
       return { ...state, thresholdHours: action.hours }
+    case 'SET_PREFIX_COPIED_FILE_NAMES':
+      return { ...state, prefixCopiedFileNames: action.enabled }
     case 'ANALYZE_PROGRESS':
       return { ...state, analyzeProgress: action.progress, analyzeError: null }
     case 'ANALYZE_DONE':
@@ -366,6 +372,36 @@ export function reducer(state: State, action: Action): State {
       // it selected in its new group — deselect explicitly so a move always
       // clears the selection it acted on.
       const selectedPaths = new Set([...reconciled].filter((p) => !paths.has(p)))
+      return { ...state, groups, viewerIndex, selectedPaths }
+    }
+    case 'MOVE_FILE_TO_INDEX': {
+      const moving = state.groups
+        .flatMap((group) => group.files)
+        .find((file) => file.path === action.path)
+      const targetExists = state.groups.some((group) => group.id === action.targetGroupId)
+      if (!moving || !targetExists) return state
+
+      const prevFlat = flattenGroupFiles(state.groups)
+      const groups = withRebuiltMetadata(
+        state.groups
+          .map((group) => {
+            const remaining = group.files.filter((file) => file.path !== action.path)
+            if (group.id !== action.targetGroupId) return { ...group, files: remaining }
+
+            const insertAt = Math.max(0, Math.min(action.targetIndex, remaining.length))
+            const files = [...remaining]
+            files.splice(insertAt, 0, moving)
+            return { ...group, files }
+          })
+          .filter((group) => group.files.length > 0)
+      )
+      const { viewerIndex, selectedPaths: reconciled } = reconcileAfterGroupsChange(
+        prevFlat,
+        state.viewerIndex,
+        state.selectedPaths,
+        groups
+      )
+      const selectedPaths = new Set([...reconciled].filter((path) => path !== action.path))
       return { ...state, groups, viewerIndex, selectedPaths }
     }
     case 'REORDER_FILES': {

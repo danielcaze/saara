@@ -3,7 +3,7 @@ import path from 'node:path'
 import { extractFileMetadata } from '../../../src/main/metadata/extractMetadata'
 import { shutdownExiftool } from '../../../src/main/metadata/exiftoolClient'
 
-const fixture = (name: string) => path.join(__dirname, '../../fixtures', name)
+const fixture = (name: string): string => path.join(__dirname, '../../fixtures', name)
 
 describe('extractFileMetadata', () => {
   afterAll(async () => {
