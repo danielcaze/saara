@@ -14,13 +14,16 @@ function toFileMeta(m: ExtractedMetadata, fileName: string): FileMeta {
     mediaType: m.mediaType,
     timestamp: m.timestamp ? m.timestamp.toISOString() : null,
     timestampSource: m.timestampSource,
-    metadataError: m.error ?? null,
+    metadataError: m.error ?? null
   }
 }
 
 function toPhotoGroups(metadata: ExtractedMetadata[], thresholdMs: number): PhotoGroup[] {
   const byPath = new Map(metadata.map((m) => [m.path, m]))
-  const timestamped: TimestampedFile[] = metadata.map((m) => ({ path: m.path, timestamp: m.timestamp }))
+  const timestamped: TimestampedFile[] = metadata.map((m) => ({
+    path: m.path,
+    timestamp: m.timestamp
+  }))
   const clustered = clusterByGap(timestamped, thresholdMs)
 
   return clustered.map((g) => {
@@ -34,7 +37,7 @@ function toPhotoGroups(metadata: ExtractedMetadata[], thresholdMs: number): Phot
       files,
       startDate: g.startDate ? g.startDate.toISOString() : null,
       endDate: g.endDate ? g.endDate.toISOString() : null,
-      isNoDateGroup: g.isNoDateGroup,
+      isNoDateGroup: g.isNoDateGroup
     }
   })
 }
@@ -42,7 +45,7 @@ function toPhotoGroups(metadata: ExtractedMetadata[], thresholdMs: number): Phot
 export async function analyzeSource(
   sourcePath: string,
   thresholdMs: number,
-  onProgress: (p: AnalyzeProgress) => void,
+  onProgress: (p: AnalyzeProgress) => void
 ): Promise<PhotoGroup[]> {
   await assertIsDirectory(sourcePath)
 
@@ -52,7 +55,7 @@ export async function analyzeSource(
   onProgress({ phase: 'reading-metadata', current: 0, total: scanned.length })
   cachedMetadata = await extractMetadataBatch(
     scanned.map((s) => ({ path: s.path, mediaType: s.mediaType })),
-    (done, total) => onProgress({ phase: 'reading-metadata', current: done, total }),
+    (done, total) => onProgress({ phase: 'reading-metadata', current: done, total })
   )
 
   onProgress({ phase: 'clustering', current: 0, total: cachedMetadata.length })
@@ -61,4 +64,17 @@ export async function analyzeSource(
 
 export function recluster(thresholdMs: number): PhotoGroup[] {
   return toPhotoGroups(cachedMetadata, thresholdMs)
+}
+
+// analyzeSource runs inside a worker thread (see analyzeWorker.ts) so it has
+// its own module instance and its own cachedMetadata. These let the main
+// thread pull that metadata back out once the worker reports done, so
+// recluster() (called from the main thread, cheap enough to stay there) keeps
+// working against the same data the worker just extracted.
+export function getCachedMetadata(): ExtractedMetadata[] {
+  return cachedMetadata
+}
+
+export function setCachedMetadata(metadata: ExtractedMetadata[]): void {
+  cachedMetadata = metadata
 }
