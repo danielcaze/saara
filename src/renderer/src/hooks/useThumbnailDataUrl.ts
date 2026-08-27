@@ -21,7 +21,7 @@ export function useThumbnailDataUrl(path: string | null, mediaType: MediaType): 
   })
 
   useEffect(() => {
-    if (!path || mediaType === 'video') return
+    if (!path) return
 
     let cancelled = false
     window.saaraAPI.getThumbnail(path, mediaType).then((res) => {

@@ -1,11 +1,16 @@
+import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
+import { app } from 'electron'
+import ffmpegPath from 'ffmpeg-static'
 import { exiftool } from '../metadata/exiftoolClient'
 import type { MediaType } from '../../shared/types'
 
-export async function extractThumbnail(filePath: string, mediaType: MediaType): Promise<string | null> {
-  if (mediaType === 'video' || mediaType === 'unsupported') {
-    return null
-  }
+export async function extractThumbnail(
+  filePath: string,
+  mediaType: MediaType
+): Promise<string | null> {
+  if (mediaType === 'video') return extractVideoThumbnail(filePath)
+  if (mediaType === 'unsupported') return null
   try {
     const buffer = await exiftool
       .extractBinaryTagToBuffer('ThumbnailImage', filePath)
@@ -15,6 +20,47 @@ export async function extractThumbnail(filePath: string, mediaType: MediaType): 
   } catch {
     return null
   }
+}
+
+function bundledFfmpegPath(): string | null {
+  if (!ffmpegPath) return null
+  return app.isPackaged ? ffmpegPath.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1') : ffmpegPath
+}
+
+async function extractVideoThumbnail(filePath: string): Promise<string | null> {
+  const executable = bundledFfmpegPath()
+  if (!executable) return null
+
+  return new Promise((resolve) => {
+    const child = spawn(executable, [
+      '-v',
+      'error',
+      '-ss',
+      '1',
+      '-i',
+      filePath,
+      '-frames:v',
+      '1',
+      '-f',
+      'image2pipe',
+      '-vcodec',
+      'mjpeg',
+      'pipe:1'
+    ])
+    const chunks: Buffer[] = []
+
+    child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+    child.stderr.resume()
+    child.once('error', () => resolve(null))
+    child.once('close', (code) => {
+      const buffer = Buffer.concat(chunks)
+      resolve(
+        code === 0 && buffer.length > 0
+          ? `data:image/jpeg;base64,${buffer.toString('base64')}`
+          : null
+      )
+    })
+  })
 }
 
 // The Lightbox needs full quality, not a thumbnail. For ordinary
