@@ -226,16 +226,10 @@ button.icon-button:hover:not(:disabled) {
   gap: var(--space-2);
 }
 
-.group-card-thumbs {
-  display: flex;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-  flex-wrap: wrap;
-}
-
 .thumb {
-  width: 64px;
-  height: 64px;
+  display: block;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
@@ -453,14 +447,38 @@ input[type='number'] {
   border-color: var(--color-accent);
 }
 
-/* --- Lightbox, selection, file-list additions below --- */
+/* --- Lightbox, selection, photo-grid additions below --- */
 
-.thumb-wrap {
+.group-card-photo-grid {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.group-card-photo-grid-collapsed {
+  grid-auto-columns: minmax(120px, 1fr);
+  grid-auto-flow: column;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+}
+
+.group-card-photo-grid-expanded {
+  grid-template-columns: repeat(auto-fill, minmax(144px, 1fr));
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: var(--space-1);
+}
+
+.group-card-photo-tile {
   position: relative;
 }
 
-.thumb-wrap-dragging,
-.group-card-file-row-dragging {
+.group-card-photo-image {
+  position: relative;
+  aspect-ratio: 1;
+}
+
+.group-card-photo-tile-dragging {
   opacity: 0.45;
 }
 
@@ -480,9 +498,9 @@ input[type='number'] {
   opacity: 0;
 }
 
-.thumb-wrap:hover .drag-handle,
+.group-card-photo-tile:hover .drag-handle,
 .drag-handle:focus-visible,
-.group-card-file-row .drag-handle {
+.group-card-photo-tile .drag-handle {
   opacity: 1;
 }
 
@@ -490,10 +508,8 @@ input[type='number'] {
   cursor: grabbing;
 }
 
-.thumb-wrap-insert-before::before,
-.group-card-file-row-insert-before::before,
-.thumb-wrap-insert-after::after,
-.group-card-file-row-insert-after::after {
+.group-card-photo-tile-insert-before::before,
+.group-card-photo-tile-insert-after::after {
   position: absolute;
   z-index: 3;
   display: block;
@@ -502,40 +518,17 @@ input[type='number'] {
   content: '';
 }
 
-.thumb-wrap-insert-before::before,
-.thumb-wrap-insert-after::after {
+.group-card-photo-tile-insert-before::before,
+.group-card-photo-tile-insert-after::after {
   right: 0;
   left: 0;
 }
 
-.thumb-wrap-insert-before::before {
+.group-card-photo-tile-insert-before::before {
   top: -5px;
 }
-.thumb-wrap-insert-after::after {
+.group-card-photo-tile-insert-after::after {
   bottom: -5px;
-}
-
-.group-card-file-row {
-  position: relative;
-}
-
-.group-card-file-row .drag-handle {
-  position: static;
-  flex: 0 0 auto;
-  background: transparent;
-}
-
-.group-card-file-row-insert-before::before,
-.group-card-file-row-insert-after::after {
-  right: 0;
-  left: 0;
-}
-
-.group-card-file-row-insert-before::before {
-  top: -2px;
-}
-.group-card-file-row-insert-after::after {
-  bottom: -2px;
 }
 
 .new-group-drop-tile {
@@ -572,8 +565,8 @@ input[type='number'] {
 
 .thumb-select {
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: var(--space-1);
+  left: var(--space-1);
   z-index: 1;
   display: flex;
   align-items: center;
@@ -590,33 +583,16 @@ input[type='number'] {
   transition: opacity 120ms ease;
 }
 
-.thumb-wrap:hover .thumb-select,
+.group-card-photo-tile:hover .thumb-select,
 .thumb-select:focus-visible,
 .group-card-selecting .thumb-select,
-.thumb-wrap-selected .thumb-select {
+.group-card-photo-tile-selected .thumb-select {
   opacity: 1;
 }
 
-.group-card-file-list {
-  list-style: none;
-  margin: var(--space-2) 0 0;
-  padding: 0;
-}
-
-.group-card-file-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) 0;
-}
-
-.group-card-file-row .thumb-select {
-  position: static;
-  opacity: 1;
-}
-
-.group-card-file-name {
-  flex: 1;
+.group-card-photo-name {
+  width: 100%;
+  margin-top: var(--space-1);
   padding: 0;
   border: none;
   background: none;
@@ -624,16 +600,52 @@ input[type='number'] {
   font: inherit;
   text-align: left;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.group-card-file-rename {
-  flex: 1;
+.group-card-photo-rename {
+  width: 100%;
+  margin-top: var(--space-1);
   min-width: 0;
 }
 
-.group-card-file-row:hover .group-card-file-name,
-.group-card-file-row:hover .group-card-file-rename-btn {
+.group-card-photo-tile:hover .group-card-photo-name {
   color: var(--color-accent-hover);
+}
+
+.group-card-photo-delete {
+  position: absolute;
+  z-index: 2;
+  right: var(--space-1);
+  bottom: var(--space-1);
+  padding: var(--space-1);
+  background: rgba(5, 5, 5, 0.7);
+  opacity: 0;
+}
+
+.group-card-photo-tile:hover .group-card-photo-delete,
+.group-card-photo-delete:focus-visible {
+  opacity: 1;
+}
+
+.group-card-photo-image .thumb-open {
+  width: 100%;
+  height: 100%;
+}
+
+.group-card-photo-tile .thumb-open:active {
+  transform: scale(0.97);
+  transition: transform 100ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group-card-photo-tile .thumb-open:active {
+    transform: none;
+    transition: opacity 100ms ease-out;
+    opacity: 0.8;
+  }
 }
 
 .lightbox-filename {
