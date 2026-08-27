@@ -369,6 +369,13 @@ body,
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Reserves the scrollbar's width whether or not content is currently
+     tall enough to need it. Without this, expanding a group grows the
+     page past the fold, the scrollbar pops in, and every card (including
+     the one you just expanded) loses that width mid-interaction — which
+     was shifting how many photo tiles fit per row between collapsed and
+     expanded. */
+  scrollbar-gutter: stable;
   margin-top: var(--space-4);
 }
 
