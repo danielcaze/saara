@@ -221,9 +221,19 @@ button.icon-button:hover:not(:disabled) {
 }
 
 .group-card-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  /* Solid (not translucent) so thumbnails scrolling underneath don't show
+     through — home-content is the sticky container, so each group's header
+     pins at its top edge and is naturally handed off to the next group's
+     header once this card scrolls past. */
+  background: var(--color-bg);
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .thumb {
@@ -473,18 +483,12 @@ input[type='number'] {
   grid-auto-flow: column;
   grid-template-rows: 1fr;
   overflow: hidden;
-  /* Reserves the same gutter expanded's scrollbar takes, even though this
-     row never scrolls — otherwise it fits one more 144px column than
-     expanded does, and the same photo lands in a different row depending
-     on which state you're in. */
-  scrollbar-gutter: stable;
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
   mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
 }
 
 .group-card-photo-grid-expanded {
   grid-template-columns: repeat(auto-fill, 144px);
-  scrollbar-gutter: stable;
 }
 
 .group-card-photo-tile {
@@ -638,6 +642,16 @@ input[type='number'] {
   width: 100%;
   margin-top: var(--space-1);
   min-width: 0;
+  /* Matches the name button's box exactly (no padding, transparent 1px
+     border, inherited font-size) so swapping button->input on rename
+     doesn't change the tile's height and shove the grid row below it. */
+  padding: 0;
+  border: 1px solid transparent;
+  font-size: inherit;
+}
+
+.group-card-photo-rename:focus {
+  border-color: var(--color-accent);
 }
 
 .group-card-photo-tile:hover .group-card-photo-name {
