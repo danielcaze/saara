@@ -151,7 +151,7 @@ function withRebuiltMetadata(groups: PhotoGroup[]): PhotoGroup[] {
 function uniqueGroupName(groups: PhotoGroup[], name: string): string {
   const taken = new Set(groups.map((g) => g.name))
   if (!taken.has(name)) return name
-  let n = 2
+  let n = 1
   while (taken.has(`${name} (${n})`)) n++
   return `${name} (${n})`
 }

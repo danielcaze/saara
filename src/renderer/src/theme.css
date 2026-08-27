@@ -461,6 +461,14 @@ input[type='number'] {
 }
 
 .group-card-photo-grid-collapsed {
+  /* grid-template-columns (not just grid-auto-columns) so the first row of
+     columns is sized by the same auto-fill floor-fit algorithm expanded
+     uses — auto-flow:column alone lays every item into 144px tracks with
+     no regard for how many actually fit, so it always shows one more
+     (partial, clipped) column than expanded's floor-fit count. Extra items
+     beyond that first fitted row continue into same-size implicit columns
+     via grid-auto-columns, still clipped, but never a stray partial one. */
+  grid-template-columns: repeat(auto-fill, 144px);
   grid-auto-columns: 144px;
   grid-auto-flow: column;
   grid-template-rows: 1fr;
