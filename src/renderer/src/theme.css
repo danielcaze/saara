@@ -804,6 +804,12 @@ input[type='number'] {
   color: var(--color-accent-hover);
 }
 
+.settings-dialog-version {
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .settings-dialog {
     transform: none !important;
