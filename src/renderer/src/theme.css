@@ -498,6 +498,12 @@ input[type='number'] {
      clips the zero-height rows' content instead of letting it bleed through. */
   grid-template-rows: auto;
   grid-auto-rows: 0;
+  /* gap applies between every row, including the collapsed ones — with
+     hundreds of files that's dozens of 0-height rows each still adding a
+     full row-gap, ballooning the container height even though nothing in
+     those rows is visible. Row spacing isn't needed when only one row
+     shows, so zero just that axis. */
+  row-gap: 0;
   overflow: hidden;
 }
 
