@@ -124,6 +124,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     await setSettings(app.getPath('userData'), settings)
   })
 
+  ipcMain.handle(IPC.APP_GET_VERSION, () => app.getVersion())
+
   ipcMain.handle(IPC.DRIVE_STATUS, async () => {
     const tokens = await getDriveTokens(app.getPath('userData'), driveCipher)
     return { connected: !!tokens, email: tokens?.email ?? null }

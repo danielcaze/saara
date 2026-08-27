@@ -75,7 +75,9 @@ const saaraAPI = {
   openDriveRoot: (): Promise<void> => ipcRenderer.invoke(IPC.DRIVE_OPEN_ROOT),
 
   shareDriveGroup: (folderId: string): Promise<string> =>
-    ipcRenderer.invoke(IPC.DRIVE_SHARE_GROUP, { folderId })
+    ipcRenderer.invoke(IPC.DRIVE_SHARE_GROUP, { folderId }),
+
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke(IPC.APP_GET_VERSION)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

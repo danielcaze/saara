@@ -80,7 +80,12 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
   const { rawValue, error, handleChange, handleSave } = useThresholdSettings(workflow, onClose)
   const animation = dialogAnimation(shouldReduceMotion)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [appVersion, setAppVersion] = useState('')
   const { driveStatus } = workflow.state
+
+  useEffect(() => {
+    window.saaraAPI.getAppVersion().then(setAppVersion)
+  }, [])
 
   async function handleDisconnectDrive(): Promise<void> {
     setDisconnecting(true)
@@ -181,14 +186,18 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
           </div>
         )}
 
-        <a
-          className="settings-dialog-contact"
-          href="https://github.com/danielcaze/saara/issues/new"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Found a bug? Report it on GitHub <ArrowSquareOut size={16} aria-hidden="true" />
-        </a>
+        <div className="settings-dialog-footer">
+          <a
+            className="settings-dialog-contact"
+            href="https://github.com/danielcaze/saara/issues/new"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Found a bug? Report it on GitHub <ArrowSquareOut size={16} aria-hidden="true" />
+          </a>
+
+          {appVersion && <span className="settings-dialog-version">Saara v{appVersion}</span>}
+        </div>
 
         <div className="modal-actions">
           <button type="button" className="modal-secondary" onClick={onClose}>
