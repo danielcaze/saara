@@ -13,7 +13,8 @@ import {
   driveUploadStartRequestSchema,
   driveShareGroupRequestSchema
 } from '../../shared/ipcSchemas'
-import { analyzeSource, recluster } from '../importSession'
+import { recluster } from '../importSession'
+import { runAnalyzeInWorker } from '../analyzeWorkerRunner'
 import { runCopyPlan } from '../fs/copyEngine'
 import { extractThumbnail, extractLightboxPreview } from '../thumbnails/extractThumbnail'
 import { getSettings, setSettings } from '../settings/settingsStore'
@@ -69,7 +70,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
 
   ipcMain.handle(IPC.ANALYZE, async (_event, payload) => {
     const { sourcePath, thresholdMs } = analyzeRequestSchema.parse(payload)
-    const groups = await analyzeSource(sourcePath, thresholdMs, (progress) => {
+    const groups = await runAnalyzeInWorker(sourcePath, thresholdMs, (progress) => {
       const win = getWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send(IPC.ANALYZE_PROGRESS, progress)
