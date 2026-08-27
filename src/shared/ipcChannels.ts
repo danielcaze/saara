@@ -2,6 +2,7 @@ export const IPC = {
   SELECT_FOLDER: 'dialog:selectFolder',
   ANALYZE: 'import:analyze',
   ANALYZE_PROGRESS: 'import:analyze:progress',
+  ANALYZE_CANCEL: 'import:analyze:cancel',
   RECOMPUTE_CLUSTERS: 'cluster:recompute',
   GET_THUMBNAIL: 'thumbnail:get',
   GET_LIGHTBOX_PREVIEW: 'thumbnail:getLightboxPreview',

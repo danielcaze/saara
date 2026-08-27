@@ -14,7 +14,7 @@ import {
   driveShareGroupRequestSchema
 } from '../../shared/ipcSchemas'
 import { recluster } from '../importSession'
-import { runAnalyzeInWorker } from '../analyzeWorkerRunner'
+import { runAnalyzeInWorker, cancelAnalyze } from '../analyzeWorkerRunner'
 import { runCopyPlan } from '../fs/copyEngine'
 import { extractThumbnail, extractLightboxPreview } from '../thumbnails/extractThumbnail'
 import { getSettings, setSettings } from '../settings/settingsStore'
@@ -77,6 +77,10 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
       }
     })
     return { groups }
+  })
+
+  ipcMain.handle(IPC.ANALYZE_CANCEL, async () => {
+    cancelAnalyze()
   })
 
   ipcMain.handle(IPC.RECOMPUTE_CLUSTERS, async (_event, payload) => {

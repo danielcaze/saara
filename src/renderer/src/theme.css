@@ -447,6 +447,11 @@ input[type='number'] {
   border-color: var(--color-accent);
 }
 
+.dropzone-corner-button:active {
+  transform: scale(0.92);
+  transition: transform 100ms ease-out;
+}
+
 /* --- Lightbox, selection, photo-grid additions below --- */
 
 .group-card-photo-grid {

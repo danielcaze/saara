@@ -37,6 +37,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     state,
     pickSource,
     dropSource,
+    removeSource,
     pickDestination,
     dropDestination,
     toggleDestinationType,
@@ -77,7 +78,15 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           : state.groups.length > 0
             ? 'reviewing'
             : 'empty'
-  const boxesDisabled = state.copying || !!state.analyzeProgress
+  // Source locks once picked (removable only via its X badge, which also
+  // cancels an in-flight analyze) — re-selecting mid-analyze would leave the
+  // worker analyzing a folder no longer reflected on screen. Destination has
+  // no such hazard: picking it doesn't touch the source's analyze, and
+  // nothing consumes it until a copy actually starts, so it only locks once
+  // a copy is running.
+  const sourceDisabled = state.copying
+  const sourceLocked = !state.copying && !!state.sourcePath
+  const destinationDisabled = state.copying
   const isDrive = state.destinationType === 'drive'
 
   useEffect(() => {
@@ -184,7 +193,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
         <button
           className="icon-button"
           onClick={onOpenSettings}
-          disabled={boxesDisabled}
+          disabled={state.copying}
           aria-label="Settings"
         >
           <Gear size={18} aria-hidden="true" />
@@ -199,7 +208,17 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           path={state.sourcePath}
           onPick={pickSource}
           onDropPath={dropSource}
-          disabled={boxesDisabled}
+          disabled={sourceDisabled}
+          locked={sourceLocked}
+          cornerButton={
+            state.sourcePath && !state.copying
+              ? {
+                  icon: <X size={16} aria-hidden="true" />,
+                  label: 'Remove source folder',
+                  onClick: removeSource
+                }
+              : undefined
+          }
         />
         <Dropzone
           label="Destination"
@@ -208,7 +227,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           path={state.destinationPath}
           onPick={pickDestination}
           onDropPath={dropDestination}
-          disabled={boxesDisabled}
+          disabled={destinationDisabled}
           overrideBody={driveBody}
           cornerButton={{
             icon: isDrive ? (

@@ -16,6 +16,11 @@ interface Props {
   onPick: () => void
   onDropPath: (path: string) => void
   disabled?: boolean
+  // Like `disabled` (no click-to-browse, no drag-drop) but for a zone that
+  // already holds a value rather than one that's busy — so it keeps its
+  // normal look instead of the dimmed/disabled styling, and stays
+  // interactive for a cornerButton (e.g. a remove badge) to undo it.
+  locked?: boolean
   cornerButton?: CornerButtonProps
   overrideBody?: ReactNode
 }
@@ -28,14 +33,16 @@ export function Dropzone({
   onPick,
   onDropPath,
   disabled,
+  locked,
   cornerButton,
   overrideBody
 }: Props): React.JSX.Element {
   const [isDragOver, setIsDragOver] = useState(false)
+  const inert = disabled || locked
 
   function handleDragOver(e: DragEvent<HTMLDivElement>): void {
     e.preventDefault()
-    if (!disabled && !overrideBody) setIsDragOver(true)
+    if (!inert && !overrideBody) setIsDragOver(true)
   }
 
   function handleDragLeave(): void {
@@ -45,7 +52,7 @@ export function Dropzone({
   function handleDrop(e: DragEvent<HTMLDivElement>): void {
     e.preventDefault()
     setIsDragOver(false)
-    if (disabled || overrideBody) return
+    if (inert || overrideBody) return
     const file = e.dataTransfer.files[0]
     if (!file) return
     const droppedPath = window.saaraAPI.getPathForFile(file)
@@ -59,7 +66,7 @@ export function Dropzone({
     // the corner button would *also* trigger this div's onPick, since
     // native keydown bubbling isn't affected by the corner button's own
     // click-level stopPropagation().
-    if (disabled || overrideBody || e.target !== e.currentTarget) return
+    if (inert || overrideBody || e.target !== e.currentTarget) return
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       onPick()
@@ -73,10 +80,10 @@ export function Dropzone({
       className={`dropzone${isDragOver ? ' dropzone-active' : ''}`}
       data-disabled={disabled ? 'true' : 'false'}
       role="button"
-      tabIndex={disabled ? -1 : 0}
-      aria-disabled={disabled ? 'true' : undefined}
+      tabIndex={inert ? -1 : 0}
+      aria-disabled={inert ? 'true' : undefined}
       aria-label={accessibleLabel}
-      onClick={disabled || overrideBody ? undefined : onPick}
+      onClick={inert || overrideBody ? undefined : onPick}
       onKeyDown={handleKeyDown}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
