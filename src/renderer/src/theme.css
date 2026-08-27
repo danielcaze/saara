@@ -615,6 +615,9 @@ input[type='number'] {
   font: inherit;
   text-align: left;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .group-card-photo-name-icon {
