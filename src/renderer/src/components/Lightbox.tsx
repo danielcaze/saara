@@ -13,7 +13,7 @@ import {
 import type { PhotoGroup } from '../../../shared/types'
 
 import { flattenGroupFiles } from '../hooks/importWorkflowReducer'
-import { useLightboxPreview } from '../hooks/useLightboxPreview'
+import { prefetchLightboxPreview, useLightboxPreview } from '../hooks/useLightboxPreview'
 import { DeleteConfirmModal } from './DeleteConfirmModal'
 import { MoveGroupModal } from './MoveGroupModal'
 
@@ -115,6 +115,17 @@ export function Lightbox({
     current?.file.path ?? null,
     current?.file.mediaType ?? 'unsupported'
   )
+
+  useEffect(() => {
+    const neighbors = flattenGroupFiles(groups)
+    const radius = 2
+    for (let offset = 1; offset <= radius; offset++) {
+      const next = neighbors[index + offset]
+      const prev = neighbors[index - offset]
+      if (next) prefetchLightboxPreview(next.file.path, next.file.mediaType)
+      if (prev) prefetchLightboxPreview(prev.file.path, prev.file.mediaType)
+    }
+  }, [groups, index])
 
   if (!current) return null
 
