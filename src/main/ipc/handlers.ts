@@ -40,7 +40,7 @@ function requireDriveConfig(): DriveOAuthConfig {
   const config = getDriveOAuthConfig()
   if (!config) {
     throw new Error(
-      'Google Drive is not configured for this build (missing GOOGLE_DRIVE_CLIENT_ID/GOOGLE_DRIVE_CLIENT_SECRET).'
+      'Google Drive is not configured for this build (missing MAIN_VITE_GOOGLE_DRIVE_CLIENT_ID/MAIN_VITE_GOOGLE_DRIVE_CLIENT_SECRET).'
     )
   }
   return config

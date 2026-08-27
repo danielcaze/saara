@@ -1,6 +1,6 @@
 {
   "name": "saara",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Desktop app that imports photos from an SD card, groups them into events, and copies or uploads each group to a local folder or Google Drive.",
   "main": "./out/main/index.js",
   "author": "Daniel Cazé <danielcazedev@gmail.com>",

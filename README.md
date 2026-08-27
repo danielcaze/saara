@@ -32,8 +32,8 @@ Local-folder destination works with no setup. To enable the Google Drive destina
 6. Copy `.env.example` to `.env` in the project root and paste them in:
 
 ```
-GOOGLE_DRIVE_CLIENT_ID=
-GOOGLE_DRIVE_CLIENT_SECRET=
+MAIN_VITE_GOOGLE_DRIVE_CLIENT_ID=
+MAIN_VITE_GOOGLE_DRIVE_CLIENT_SECRET=
 ```
 
 ## Development
