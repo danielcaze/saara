@@ -372,6 +372,22 @@ body,
   word-break: break-all;
 }
 
+.drive-destination-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 2.25rem;
+}
+
+.drive-destination-status .dropzone-path,
+.drive-destination-status .field-error {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .home-content {
   flex: 1;
   min-height: 0;

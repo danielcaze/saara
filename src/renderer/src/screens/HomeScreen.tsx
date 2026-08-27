@@ -414,22 +414,25 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     <>
       <FolderPlus size={28} aria-hidden="true" />
       <span className="dropzone-label">Destination</span>
-      {state.driveStatus.connected ? (
-        <span className="dropzone-path">{state.driveStatus.email}</span>
-      ) : (
-        <button
-          type="button"
-          className="field-button"
-          disabled={state.driveConnecting}
-          onClick={(e) => {
-            e.stopPropagation()
-            void connectDrive()
-          }}
-        >
-          {state.driveConnecting ? 'Connecting…' : 'Connect Google Drive'}
-        </button>
-      )}
-      {state.driveError && <span className="field-error">{state.driveError}</span>}
+      <div className="drive-destination-status">
+        {state.driveStatus.connected ? (
+          <span className="dropzone-path">{state.driveStatus.email}</span>
+        ) : state.driveError ? (
+          <span className="field-error">{state.driveError}</span>
+        ) : (
+          <button
+            type="button"
+            className="field-button"
+            disabled={state.driveConnecting}
+            onClick={(e) => {
+              e.stopPropagation()
+              void connectDrive()
+            }}
+          >
+            {state.driveConnecting ? 'Connecting…' : 'Connect Google Drive'}
+          </button>
+        )}
+      </div>
     </>
   ) : undefined
 
