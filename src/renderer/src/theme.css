@@ -476,8 +476,6 @@ input[type='number'] {
 
 .group-card-photo-grid-expanded {
   grid-template-columns: repeat(auto-fill, 144px);
-  max-height: 60vh;
-  overflow-y: auto;
   scrollbar-gutter: stable;
 }
 
