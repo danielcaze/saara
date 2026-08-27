@@ -480,7 +480,8 @@ input[type='number'] {
      expanded now render the exact same grid below, so there's no longer a
      second track-sizing algorithm that can drift out of sync and mismatch
      tile counts (the entire prior source of that bug class). */
-  overflow: hidden;
+  overflow-x: visible;
+  overflow-y: hidden;
 }
 
 .group-card-photo-grid {
@@ -644,11 +645,14 @@ input[type='number'] {
   margin-top: var(--space-1);
   min-width: 0;
   /* Matches the name button's box exactly (no padding, transparent 1px
-     border, inherited font-size) so swapping button->input on rename
-     doesn't change the tile's height and shove the grid row below it. */
+     border, inherited font incl. line-height) so swapping button->input on
+     rename doesn't change the tile's height and shove the grid row below
+     it. `font-size: inherit` alone left the UA default line-height in
+     place, which was a hair shorter than the button's `font: inherit` and
+     shrank the row while renaming with the group collapsed. */
   padding: 0;
   border: 1px solid transparent;
-  font-size: inherit;
+  font: inherit;
 }
 
 .group-card-photo-rename:focus {

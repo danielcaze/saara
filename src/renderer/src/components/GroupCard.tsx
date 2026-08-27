@@ -1,4 +1,4 @@
-import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { CaretRight, CaretDown } from '@phosphor-icons/react'
 import { motion, useReducedMotion } from 'motion/react'
 
@@ -40,8 +40,24 @@ export function GroupCard({
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
   const renameInputId = useId()
   const gridRef = useRef<HTMLDivElement>(null)
+  const measureGridRef = useRef<() => void>(() => {})
   const [gridHeights, setGridHeights] = useState({ row: 0, full: 0 })
+  // Starts false so the very first real measurement (0 -> actual height,
+  // right after mount) snaps in instantly instead of springing up from 0 —
+  // without this every group loads with its first row visibly growing into
+  // place, sometimes caught mid-animation with the filenames half-rendered.
+  const [hasMeasuredOnce, setHasMeasuredOnce] = useState(false)
   const shouldReduceMotion = useReducedMotion() ?? false
+  // A fixed duration made a 221-file group snap open just as fast as a
+  // 2-row one — the distance covered (one row -> the full stack) varies by
+  // orders of magnitude, so the response time has to scale with it too.
+  // Closing is always one row -> the same fixed distance, so it stays fixed.
+  const expandDistance = Math.max(0, gridHeights.full - gridHeights.row)
+  const expandDuration = Math.min(0.85, 0.4 + expandDistance / 2200)
+
+  useEffect(() => {
+    setHasMeasuredOnce(true)
+  }, [])
   const hasActiveSelection = selectedPaths.size > 0
   const isDraggingFromThisGroup = dragging?.groupId === group.id
   const isDraggingFromAnotherGroup = dragging !== null && !isDraggingFromThisGroup
@@ -108,11 +124,15 @@ export function GroupCard({
 
     function measure(): void {
       const firstTile = el?.children[0] as HTMLElement | undefined
+      // Safety margin on top of the ceil rounding — 4px still clipped the
+      // last row in devtools; 10px clears it without over-padding the row.
+      const BUFFER = 10
       setGridHeights({
-        row: firstTile?.getBoundingClientRect().height ?? 0,
-        full: el?.scrollHeight ?? 0
+        row: Math.ceil(firstTile?.getBoundingClientRect().height ?? 0) + BUFFER,
+        full: Math.ceil(el?.scrollHeight ?? 0) + BUFFER
       })
     }
+    measureGridRef.current = measure
 
     measure()
     const observer = new ResizeObserver(measure)
@@ -143,7 +163,16 @@ export function GroupCard({
       <div className="group-card-header">
         <button
           className="icon-button"
-          onClick={() => setExpanded((v) => !v)}
+          onClick={() => {
+            setExpanded((v) => !v)
+            // The ResizeObserver only re-measures when the grid's own box
+            // changes — it won't catch a reflow that lands a frame or two
+            // after this click (e.g. a sibling layout settling), so the
+            // very first open could target a stale "full" height and clip
+            // the last row. Double rAF re-measures once that settling is
+            // done, after this render and the next paint.
+            requestAnimationFrame(() => requestAnimationFrame(() => measureGridRef.current()))
+          }}
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse group' : 'Expand group'}
         >
@@ -174,17 +203,25 @@ export function GroupCard({
       <motion.div
         className="group-card-photo-grid-clip"
         initial={false}
+        // Both targets are measured the same way (scrollHeight/rect + the
+        // same +4px buffer) and re-measured right on toggle (see the click
+        // handler). Using Motion's 'auto' for expand read the *unbuffered*
+        // true height, which didn't match the buffered collapsed height —
+        // a single-row group visibly grew a few px on open even though
+        // there was nothing new to reveal. Two numbers from the same
+        // measurement basis stay consistent instead.
         animate={{ height: expanded ? gridHeights.full : gridHeights.row }}
         transition={
-          shouldReduceMotion
-            ? { duration: 0.1 }
-            : // Collapsed height is exactly one row, so there's nothing peeking
-              // out below it — a fade mask there only ate into row 1's own
-              // filenames. Opening also covers a much bigger distance than
-              // closing (one row -> the whole group), so it gets a longer
-              // response; a fixed duration for both reads as a harsh snap on
-              // the way open.
-              { type: 'spring', bounce: 0, duration: expanded ? 0.45 : 0.3 }
+          !hasMeasuredOnce
+            ? { duration: 0 }
+            : shouldReduceMotion
+              ? { duration: 0.1 }
+              : // Collapsed height is exactly one row, so there's nothing peeking
+                // out below it — a fade mask there only ate into row 1's own
+                // filenames. Opening's duration scales with distance (see
+                // expandDuration above); closing is always the same
+                // distance (full -> one row), so it keeps a fixed response.
+                { type: 'spring', bounce: 0, duration: expanded ? expandDuration : 0.4 }
         }
       >
         <div
