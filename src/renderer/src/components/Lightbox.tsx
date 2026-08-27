@@ -32,6 +32,38 @@ interface Props {
   onRename: (path: string, fileName: string) => void
 }
 
+function mediaUrl(filePath: string): string {
+  return `saara-media://media/?path=${encodeURIComponent(filePath)}`
+}
+
+function VideoPlayer({ path, fileName }: { path: string; fileName: string }): React.JSX.Element {
+  const [ready, setReady] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  if (failed) {
+    return (
+      <div className="lightbox-video-placeholder">
+        <span>Couldn&apos;t play {fileName} in this app.</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="lightbox-video-container">
+      <video
+        className="lightbox-video"
+        controls
+        playsInline
+        aria-label={`Play ${fileName}`}
+        src={mediaUrl(path)}
+        onLoadedData={() => setReady(true)}
+        onError={() => setFailed(true)}
+      />
+      {!ready && <span className="lightbox-video-loading">Loading video…</span>}
+    </div>
+  )
+}
+
 export function Lightbox({
   groups,
   index,
@@ -227,9 +259,7 @@ export function Lightbox({
           <CaretLeft size={24} aria-hidden="true" />
         </button>
         {current.file.mediaType === 'video' ? (
-          <div className="lightbox-video-placeholder">
-            <span>{current.file.fileName}</span>
-          </div>
+          <VideoPlayer key={currentPath} path={currentPath} fileName={current.file.fileName} />
         ) : failed ? (
           <div className="lightbox-video-placeholder">
             <span>Couldn&apos;t load a preview for {current.file.fileName}</span>

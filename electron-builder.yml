@@ -14,6 +14,7 @@ asarUnpack:
   - resources/**
   - node_modules/exiftool-vendored.exe/**
   - node_modules/exiftool-vendored.pl/**
+  - node_modules/ffmpeg-static/**
 win:
   executableName: saara
   target: nsis

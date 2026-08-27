@@ -11,19 +11,9 @@ interface Props {
 
 export function Thumbnail({ path, mediaType }: Props): React.JSX.Element {
   const { dataUrl, failed } = useThumbnailDataUrl(path, mediaType)
+  const fallbackIcon = mediaType === 'video' ? <FilmSlate size={24} /> : <ImageBroken size={24} />
 
-  if (mediaType === 'video')
-    return (
-      <div className="thumb thumb-icon">
-        <FilmSlate size={24} />
-      </div>
-    )
-  if (failed)
-    return (
-      <div className="thumb thumb-icon">
-        <ImageBroken size={24} />
-      </div>
-    )
+  if (failed) return <div className="thumb thumb-icon">{fallbackIcon}</div>
   if (!dataUrl) return <div className="thumb" />
   return <img className="thumb" src={dataUrl} alt="" />
 }
