@@ -211,6 +211,8 @@ export function reducer(state: State, action: Action): State {
         groups: [],
         analyzeProgress: null,
         analyzeError: null,
+        copySummary: null,
+        copyError: null,
         viewerIndex: null,
         selectedPaths: new Set()
       }

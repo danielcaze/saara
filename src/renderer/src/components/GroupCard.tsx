@@ -51,13 +51,27 @@ export function GroupCard({
   const gridClipRef = useRef<HTMLDivElement>(null)
   const measureGridRef = useRef<() => void>(() => {})
   const shouldReduceMotion = useReducedMotion() ?? false
+  // Sits behind the tiles so a drop landing in the gap between two tiles
+  // still resolves to a real target instead of falling through to nothing —
+  // dropMode is intentionally NOT 'append' here: hitting this surface should
+  // still resolve to the tile nearest the pointer via insertionIndexAtPointer,
+  // not jump to the end of the group.
   const gridDrop = useDroppable({
     id: `group:${group.id}`,
     type: 'photo-group',
     accept: 'photo',
-    data: { groupId: group.id, dropMode: 'append' }
+    data: { groupId: group.id }
   })
   const { isDropTarget: isGridDropTarget, ref: setGridDropNode } = gridDrop
+  // Covers the card body outside the grid (header/padding) — only a drop out
+  // here, past the grid's own bounds, should append to the end of the group.
+  const cardDrop = useDroppable({
+    id: `group:${group.id}:card`,
+    type: 'photo-group',
+    accept: 'photo',
+    data: { groupId: group.id, dropMode: 'append' }
+  })
+  const { isDropTarget: isCardDropTarget, ref: setCardDropNode } = cardDrop
   const hasActiveSelection = selectedPaths.size > 0
   const expandDistance = Math.max(0, gridHeights.full - gridHeights.row)
   const expandDuration = Math.min(0.85, 0.4 + expandDistance / 2200)
@@ -123,7 +137,8 @@ export function GroupCard({
 
   return (
     <div
-      className={`group-card${isGridDropTarget ? ' group-card-drop-target' : ''}`}
+      ref={setCardDropNode}
+      className={`group-card${isGridDropTarget || isCardDropTarget ? ' group-card-drop-target' : ''}`}
       data-group-id={group.id}
     >
       <div className="group-card-header">
@@ -209,15 +224,6 @@ export function GroupCard({
           ))}
         </div>
       </motion.div>
-      <AppendDropZone
-        groupId={group.id}
-        visible={
-          !expanded &&
-          dragging?.targetGroupId === group.id &&
-          dragging.groupId !== group.id &&
-          group.files.length > firstRowCount
-        }
-      />
       {deletePath && (
         <DeleteConfirmModal
           paths={[deletePath]}
@@ -228,31 +234,6 @@ export function GroupCard({
           onCancel={() => setDeletePath(null)}
         />
       )}
-    </div>
-  )
-}
-
-function AppendDropZone({
-  groupId,
-  visible
-}: {
-  groupId: string
-  visible: boolean
-}): React.JSX.Element {
-  const dropZone = useDroppable({
-    id: `group:${groupId}:append`,
-    type: 'photo-group',
-    accept: 'photo',
-    data: { groupId, dropMode: 'append' }
-  })
-  const { isDropTarget, ref: setDropZoneNode } = dropZone
-
-  return (
-    <div
-      ref={setDropZoneNode}
-      className={`group-card-append-drop-zone${visible ? ' group-card-append-drop-zone-visible' : ''}${isDropTarget ? ' group-card-append-drop-zone-active' : ''}`}
-    >
-      Drop at end
     </div>
   )
 }
