@@ -48,7 +48,12 @@ export function useThresholdSettings(
     const thresholdHours = Number(rawValue)
     await window.saaraAPI.setSettings({ thresholdHours, prefixCopiedFileNames })
     workflow.setPrefixCopiedFileNames(prefixCopiedFileNames)
-    await workflow.recluster(thresholdHours)
+    // Only recluster when the threshold actually changed — reclustering
+    // unconditionally on every save discarded manual renames/moves the user
+    // made in the review screen even when they only touched the checkbox.
+    if (thresholdHours !== workflow.state.thresholdHours) {
+      await workflow.recluster(thresholdHours)
+    }
     onSaved()
   }
 
