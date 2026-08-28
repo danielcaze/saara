@@ -20,13 +20,18 @@ export async function extractFileMetadata(
 ): Promise<ExtractedMetadata> {
   try {
     // -fast2 skips scanning to the end of the file (maker notes, trailers,
-    // composite tags) — we only need a handful of header-level date tags, so
-    // that scan work (the expensive part on a slow SD-card-via-USB adapter)
-    // is pure waste. Naming the exact tags we want also cuts the JSON payload
-    // exiftool has to serialize and pipe back per file.
+    // composite tags) — for photos we only need a handful of header-level
+    // date tags, so that scan work (the expensive part on a slow
+    // SD-card-via-USB adapter) is pure waste. Videos can't use -fast2: a
+    // camera-recorded (non-faststart) MP4/MOV often stores its moov atom
+    // after mdat, and -fast2 makes exiftool stop before reaching it, which
+    // silently drops CreateDate/MediaCreateDate/FileModifyDate. -fast still
+    // skips make/model trailer scanning but does seek to find moov.
+    // Naming the exact tags we want also cuts the JSON payload exiftool has
+    // to serialize and pipe back per file.
     const tags = await exiftool.read(filePath, {
       readArgs: [
-        '-fast2',
+        mediaType === 'video' ? '-fast' : '-fast2',
         '-DateTimeOriginal',
         '-CreateDate',
         '-MediaCreateDate',
