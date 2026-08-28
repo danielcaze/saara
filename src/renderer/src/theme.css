@@ -162,10 +162,22 @@ button.field-button:disabled {
   transform: none;
 }
 
+.copy-done-action {
+  text-align: center;
+}
+
+.copy-done-heading {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
 .drive-complete-actions {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-3);
 }
 

@@ -21,7 +21,8 @@ import {
   GoogleDriveLogo,
   FolderSimple,
   Trash,
-  X
+  X,
+  CaretLeft
 } from '@phosphor-icons/react'
 import { DeleteConfirmModal } from '../components/DeleteConfirmModal'
 import { Dropzone } from '../components/Dropzone'
@@ -623,14 +624,23 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
           {subView === 'done' && state.copySummary && (
             <motion.div
               key="done"
+              className="copy-done-view"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
             >
-              <h1>
-                <CheckCircle size={22} aria-hidden="true" />{' '}
-                {isDrive ? 'Upload complete' : 'Copy complete'}
+              <h1 className="copy-done-heading">
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={removeSource}
+                  aria-label="Back to home"
+                >
+                  <CaretLeft size={18} aria-hidden="true" />
+                </button>
+                <span>{isDrive ? 'Upload complete' : 'Copy complete'}</span>
+                <CheckCircle size={22} aria-hidden="true" />
               </h1>
               <p className="tabular-nums">
                 {state.copySummary.copiedFiles}/{state.copySummary.totalFiles} files{' '}
@@ -674,15 +684,17 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
                   )}
                 </div>
               ) : (
-                <button
-                  className="primary"
-                  disabled={!state.destinationPath}
-                  onClick={() =>
-                    state.destinationPath && window.saaraAPI.openPath(state.destinationPath)
-                  }
-                >
-                  <FolderOpen size={18} aria-hidden="true" /> Open destination folder
-                </button>
+                <div className="copy-done-action">
+                  <button
+                    className="primary"
+                    disabled={!state.destinationPath}
+                    onClick={() =>
+                      state.destinationPath && window.saaraAPI.openPath(state.destinationPath)
+                    }
+                  >
+                    <FolderOpen size={18} aria-hidden="true" /> Open destination folder
+                  </button>
+                </div>
               )}
             </motion.div>
           )}

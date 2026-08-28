@@ -4,6 +4,7 @@ import { sanitizeFolderName } from './sanitizeFolderName'
 import { writeOrderManifest } from './orderManifest'
 import type { CopyPlanGroup, CopyProgressEvent, CopySummary } from '../../shared/types'
 import { localOrderFileName } from '../../shared/localOrderFileName'
+import { getCachedMetadata } from '../importSession'
 
 export interface CopyPlan {
   destinationRoot: string
@@ -11,7 +12,11 @@ export interface CopyPlan {
   prefixFileNames?: boolean
 }
 
-const CONCURRENCY = 4
+// USB SD-card readers are latency-bound per file (open/seek/close overhead)
+// more than raw-bandwidth-bound for typical photo/video sizes, so running
+// more files in flight at once hides that per-file latency instead of
+// serializing it. 4 was leaving the adapter mostly idle between files.
+const CONCURRENCY = 16
 
 export function uniqueFolderPath(desiredName: string, taken: Set<string>): string {
   // Note: deliberately does NOT check the filesystem for an existing
@@ -56,13 +61,18 @@ async function copyOne(
   sourcePath: string,
   destDir: string,
   fileName: string,
-  existingNames: Set<string>
+  existingNames: Set<string>,
+  knownMtime: Date | null
 ): Promise<{ resolvedName: string; conflict: boolean }> {
   const { finalName, wasConflict } = claimUniqueFileName(existingNames, fileName)
   const destPath = path.join(destDir, finalName)
   await fs.copyFile(sourcePath, destPath)
-  const stat = await fs.stat(sourcePath)
-  await fs.utimes(destPath, stat.atime, stat.mtime)
+  // Analyze already read this file's mtime out of its EXIF data, so reuse it
+  // instead of stat-ing the source again (extra round trip per file, costly
+  // over a slow SD-card-via-USB adapter). Fall back to a real stat when a
+  // file wasn't part of the analyzed set (e.g. added after analyze ran).
+  const mtime = knownMtime ?? (await fs.stat(sourcePath)).mtime
+  await fs.utimes(destPath, mtime, mtime)
   return { resolvedName: finalName, conflict: wasConflict }
 }
 
@@ -95,6 +105,7 @@ export async function runCopyPlan(
   const takenFolderNames = new Set<string>()
   let copiedSoFar = 0
   const totalFiles = plan.groups.reduce((sum, g) => sum + g.files.length, 0)
+  const mtimeByPath = new Map(getCachedMetadata().map((m) => [m.path, m.mtime]))
 
   for (const [groupOrder, group] of plan.groups.entries()) {
     const folderName = uniqueFolderPath(sanitizeFolderName(group.name), takenFolderNames)
@@ -114,7 +125,8 @@ export async function runCopyPlan(
           file.sourcePath,
           destDir,
           requestedName,
-          existingNames
+          existingNames,
+          mtimeByPath.get(file.sourcePath) ?? null
         )
         copiedNames[index] = resolvedName
         progressFileName = resolvedName

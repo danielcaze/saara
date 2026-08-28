@@ -6,6 +6,7 @@ export interface ExtractedMetadata {
   mediaType: MediaType
   timestamp: Date | null
   timestampSource: 'DateTimeOriginal' | 'CreateDate' | 'MediaCreateDate' | null
+  mtime: Date | null
   error?: string
 }
 
@@ -18,7 +19,23 @@ export async function extractFileMetadata(
   mediaType: MediaType
 ): Promise<ExtractedMetadata> {
   try {
-    const tags = await exiftool.read(filePath)
+    // -fast2 skips scanning to the end of the file (maker notes, trailers,
+    // composite tags) — we only need a handful of header-level date tags, so
+    // that scan work (the expensive part on a slow SD-card-via-USB adapter)
+    // is pure waste. Naming the exact tags we want also cuts the JSON payload
+    // exiftool has to serialize and pipe back per file.
+    const tags = await exiftool.read(filePath, {
+      readArgs: [
+        '-fast2',
+        '-DateTimeOriginal',
+        '-CreateDate',
+        '-MediaCreateDate',
+        '-FileModifyDate'
+      ]
+    })
+    // exiftool already reads this off the file it just opened for EXIF, so
+    // grabbing it here saves the copy step a redundant fs.stat later.
+    const mtime = isValidExifDate(tags.FileModifyDate) ? tags.FileModifyDate.toDate() : null
 
     const candidates: Array<['DateTimeOriginal' | 'CreateDate' | 'MediaCreateDate', unknown]> =
       mediaType === 'video'
@@ -36,7 +53,7 @@ export async function extractFileMetadata(
       if (isValidExifDate(value)) {
         const date = value.toDate()
         if (!Number.isNaN(date.getTime()) && date.getTime() !== 0) {
-          return { path: filePath, mediaType, timestamp: date, timestampSource: source }
+          return { path: filePath, mediaType, timestamp: date, timestampSource: source, mtime }
         }
       }
     }
@@ -47,6 +64,7 @@ export async function extractFileMetadata(
       mediaType,
       timestamp: null,
       timestampSource: null,
+      mtime,
       ...(firstIssue ? { error: firstIssue } : {})
     }
   } catch (err) {
@@ -55,6 +73,7 @@ export async function extractFileMetadata(
       mediaType,
       timestamp: null,
       timestampSource: null,
+      mtime: null,
       error: err instanceof Error ? err.message : String(err)
     }
   }
