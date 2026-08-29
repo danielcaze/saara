@@ -80,10 +80,12 @@ export type Action =
   | { type: 'SET_VIEWER_INDEX'; index: number }
   | { type: 'TOGGLE_SELECT'; path: string }
   | { type: 'CLEAR_SELECTION' }
+  | { type: 'SET_SELECTION'; paths: string[] }
   | { type: 'SELECT_PATHS'; paths: string[] }
   | { type: 'DELETE_FILES'; paths: string[] }
   | { type: 'CREATE_GROUP'; groupId: string; name?: string }
   | { type: 'MOVE_FILES'; paths: string[]; targetGroupId: string }
+  | { type: 'MOVE_FILES_TO_INDEX'; paths: string[]; targetGroupId: string; targetIndex: number }
   | { type: 'MOVE_FILE_TO_INDEX'; path: string; targetGroupId: string; targetIndex: number }
   | { type: 'REORDER_FILES'; groupId: string; path: string; targetIndex: number }
   | { type: 'RENAME_FILE'; path: string; fileName: string }
@@ -190,6 +192,43 @@ function reconcileAfterGroupsChange(
   const idx = currentPath ? nextFlat.findIndex((f) => f.file.path === currentPath) : -1
   const viewerIndexNext = idx !== -1 ? idx : clampViewerIndex(viewerIndex, nextFlat.length)
   return { viewerIndex: viewerIndexNext, selectedPaths: selectedPathsNext }
+}
+
+function moveFilesIntoGroup(
+  state: State,
+  moving: FileMeta[],
+  targetGroupId: string,
+  targetIndex: number
+): State {
+  if (moving.length === 0 || !state.groups.some((group) => group.id === targetGroupId)) {
+    return state
+  }
+
+  const movingPaths = new Set(moving.map((file) => file.path))
+  const prevFlat = flattenGroupFiles(state.groups)
+  const groups = withRebuiltMetadata(
+    state.groups
+      .map((group) => {
+        const remaining = group.files.filter((file) => !movingPaths.has(file.path))
+        if (group.id !== targetGroupId) return { ...group, files: remaining }
+        const files = [...remaining]
+        files.splice(Math.max(0, Math.min(targetIndex, files.length)), 0, ...moving)
+        return { ...group, files }
+      })
+      .filter((group) => group.files.length > 0)
+  )
+  const { viewerIndex, selectedPaths } = reconcileAfterGroupsChange(
+    prevFlat,
+    state.viewerIndex,
+    state.selectedPaths,
+    groups
+  )
+  return {
+    ...state,
+    groups,
+    viewerIndex,
+    selectedPaths: new Set([...selectedPaths].filter((path) => !movingPaths.has(path)))
+  }
 }
 
 export function reducer(state: State, action: Action): State {
@@ -302,6 +341,8 @@ export function reducer(state: State, action: Action): State {
     }
     case 'CLEAR_SELECTION':
       return { ...state, selectedPaths: new Set() }
+    case 'SET_SELECTION':
+      return { ...state, selectedPaths: new Set(action.paths) }
     case 'SELECT_PATHS':
       // Additive: a per-group Ctrl+A must not clobber a selection made in a
       // different group moments earlier — only the whole-session Ctrl+A
@@ -380,31 +421,21 @@ export function reducer(state: State, action: Action): State {
       const moving = state.groups
         .flatMap((group) => group.files)
         .find((file) => file.path === action.path)
-      const targetExists = state.groups.some((group) => group.id === action.targetGroupId)
-      if (!moving || !targetExists) return state
-
-      const prevFlat = flattenGroupFiles(state.groups)
-      const groups = withRebuiltMetadata(
-        state.groups
-          .map((group) => {
-            const remaining = group.files.filter((file) => file.path !== action.path)
-            if (group.id !== action.targetGroupId) return { ...group, files: remaining }
-
-            const insertAt = Math.max(0, Math.min(action.targetIndex, remaining.length))
-            const files = [...remaining]
-            files.splice(insertAt, 0, moving)
-            return { ...group, files }
-          })
-          .filter((group) => group.files.length > 0)
+      return moveFilesIntoGroup(
+        state,
+        moving ? [moving] : [],
+        action.targetGroupId,
+        action.targetIndex
       )
-      const { viewerIndex, selectedPaths: reconciled } = reconcileAfterGroupsChange(
-        prevFlat,
-        state.viewerIndex,
-        state.selectedPaths,
-        groups
-      )
-      const selectedPaths = new Set([...reconciled].filter((path) => path !== action.path))
-      return { ...state, groups, viewerIndex, selectedPaths }
+    }
+    case 'MOVE_FILES_TO_INDEX': {
+      const paths = new Set(action.paths)
+      // Derive this from the flattened session rather than selection insertion
+      // order: a multi-file drag should preserve what the user saw on screen.
+      const moving = flattenGroupFiles(state.groups)
+        .map(({ file }) => file)
+        .filter((file) => paths.has(file.path))
+      return moveFilesIntoGroup(state, moving, action.targetGroupId, action.targetIndex)
     }
     case 'REORDER_FILES': {
       const group = state.groups.find((candidate) => candidate.id === action.groupId)

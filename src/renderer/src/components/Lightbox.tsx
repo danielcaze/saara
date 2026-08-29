@@ -120,6 +120,12 @@ export function Lightbox({
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {
+      // A nested modal (delete confirm / move-to) is open on top of the
+      // lightbox and owns its own capture-phase Escape handler — let that
+      // fire instead, so Escape closes just the topmost layer instead of
+      // both at once.
+      if (showDeleteConfirm || showMoveModal) return
+
       if (e.key === 'Tab') {
         const container = containerRef.current
         if (!container) return
@@ -155,14 +161,24 @@ export function Lightbox({
         return
       }
 
-      if (e.key === 'Escape') onClose()
-      else if (e.key === 'ArrowLeft') onPrev()
+      if (e.key === 'Escape') {
+        // Both this and HomeScreen's Escape listener are registered on
+        // `window`, so plain stopPropagation is a no-op between them —
+        // stopImmediatePropagation is required to stop HomeScreen's
+        // listener from also clearing the selection in the same keypress.
+        e.stopImmediatePropagation()
+        onClose()
+      } else if (e.key === 'ArrowLeft') onPrev()
       else if (e.key === 'ArrowRight') onNext()
     }
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose, onPrev, onNext])
+    // Capture phase: HomeScreen's Escape listener is registered on window
+    // too and would otherwise already have fired (registration order puts
+    // it first) by the time this bubble-phase handler ran, making its
+    // stopImmediatePropagation too late to stop it.
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [onClose, onPrev, onNext, showDeleteConfirm, showMoveModal])
 
   const { dataUrl, failed } = useLightboxPreview(
     current?.file.path ?? null,

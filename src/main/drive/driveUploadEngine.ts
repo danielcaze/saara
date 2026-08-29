@@ -11,6 +11,27 @@ export interface DriveUploadPlan {
 export interface RunDriveUploadPlanOptions {
   wait?: (ms: number) => Promise<void>
   maxBackoffMs?: number
+  concurrency?: number
+}
+
+// Runs `worker` over `items` with at most `concurrency` in flight at once.
+// Filenames are already finalized (ordering prefixes, if any, are baked in
+// upstream) before any upload starts, so uploading out of array order is
+// safe — nothing downstream depends on files landing on Drive in sequence.
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>
+): Promise<void> {
+  let nextIndex = 0
+  async function runNext(): Promise<void> {
+    for (;;) {
+      const index = nextIndex++
+      if (index >= items.length) return
+      await worker(items[index])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, runNext))
 }
 
 export async function getOrCreateRootFolder(
@@ -57,6 +78,7 @@ export async function runDriveUploadPlan(
   const wait =
     options.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
   const maxBackoffMs = options.maxBackoffMs ?? 20000
+  const concurrency = options.concurrency ?? 4
   const driveGroups: NonNullable<CopySummary['driveGroups']> = []
   const summary: CopySummary = {
     totalFiles: 0,
@@ -102,9 +124,9 @@ export async function runDriveUploadPlan(
       webViewLink: folder.webViewLink
     })
 
-    for (const file of group.files) {
-      summary.totalFiles++
+    summary.totalFiles += group.files.length
 
+    await runWithConcurrency(group.files, concurrency, async (file) => {
       if (existingNames.has(file.fileName)) {
         summary.skippedFiles++
         doneSoFar++
@@ -116,7 +138,7 @@ export async function runDriveUploadPlan(
           totalFiles,
           status: 'done'
         })
-        continue
+        return
       }
 
       let attempt = 0
@@ -183,7 +205,7 @@ export async function runDriveUploadPlan(
         totalFiles,
         status: 'uploading'
       })
-    }
+    })
   }
 
   return summary

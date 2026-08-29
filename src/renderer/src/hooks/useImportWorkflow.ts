@@ -7,6 +7,8 @@ import {
   reducer,
   type State
 } from './importWorkflowReducer'
+import { selectedExportPlan } from '../../../shared/selectedExportPlan'
+import { localOrderFileName } from '../../../shared/localOrderFileName'
 
 // Electron's ipcRenderer.invoke wraps main-process errors as
 // `Error invoking remote method '<channel>': Error: <original message>` —
@@ -30,17 +32,19 @@ interface ImportWorkflow {
   recluster: (hours: number) => Promise<void>
   setPrefixCopiedFileNames: (enabled: boolean) => void
   renameGroup: (groupId: string, name: string) => void
-  startCopy: () => Promise<void>
+  startCopy: (selectedPaths?: string[]) => Promise<void>
   openViewer: (path: string) => void
   closeViewer: () => void
   viewerNext: () => void
   viewerPrev: () => void
   toggleSelect: (path: string) => void
   clearSelection: () => void
+  setSelectionPaths: (paths: string[]) => void
   selectPaths: (paths: string[]) => void
   deleteFiles: (paths: string[]) => void
   moveFiles: (paths: string[], targetGroupId: string) => void
   moveFileToIndex: (path: string, targetGroupId: string, targetIndex: number) => void
+  moveFilesToIndex: (paths: string[], targetGroupId: string, targetIndex: number) => void
   reorderFiles: (groupId: string, path: string, targetIndex: number) => void
   createGroupAndMoveFiles: (paths: string[], name?: string) => void
   renameFile: (path: string, fileName: string) => void
@@ -151,49 +155,71 @@ export function useImportWorkflow(): ImportWorkflow {
     [state.groups]
   )
 
-  const startCopy = useCallback(async () => {
-    const isDrive = state.destinationType === 'drive'
-    if (isDrive ? !state.driveStatus.connected : !state.destinationPath) return
+  const startCopy = useCallback(
+    async (selectedPaths?: string[]) => {
+      const isDrive = state.destinationType === 'drive'
+      if (isDrive ? !state.driveStatus.connected : !state.destinationPath) return
 
-    dispatch({ type: 'START_COPY' })
-    const unsubscribe = isDrive
-      ? window.saaraAPI.onDriveUploadProgress((progress) =>
-          dispatch({ type: 'COPY_PROGRESS', progress })
-        )
-      : window.saaraAPI.onCopyProgress((progress) => dispatch({ type: 'COPY_PROGRESS', progress }))
-
-    const groups = state.groups.map((g) => ({
-      id: g.id,
-      name: g.name.trim() || defaultGroupName(g),
-      files: g.files.map((f) => ({ sourcePath: f.path, fileName: f.fileName }))
-    }))
-
-    try {
-      const summary = isDrive
-        ? await window.saaraAPI.driveUploadStart(groups)
-        : await window.saaraAPI.copyStart(
-            state.destinationPath as string,
-            groups,
-            state.prefixCopiedFileNames
+      dispatch({ type: 'START_COPY' })
+      const unsubscribe = isDrive
+        ? window.saaraAPI.onDriveUploadProgress((progress) =>
+            dispatch({ type: 'COPY_PROGRESS', progress })
           )
-      dispatch({ type: 'COPY_DONE', summary })
-    } catch (err) {
-      // Covers upfront failures with no per-file granularity to attach an error
-      // to — Drive not connected, OAuth not configured, no network at all
-      // before the first request even goes out. Without this, the UI would
-      // stay stuck on "Uploading..." forever, since nothing else clears
-      // `copying`.
-      dispatch({ type: 'COPY_ERROR', message: friendlyIpcError(err) })
-    } finally {
-      unsubscribe()
-    }
-  }, [
-    state.destinationType,
-    state.destinationPath,
-    state.driveStatus.connected,
-    state.groups,
-    state.prefixCopiedFileNames
-  ])
+        : window.saaraAPI.onCopyProgress((progress) =>
+            dispatch({ type: 'COPY_PROGRESS', progress })
+          )
+
+      const namedGroups = state.groups.map((group) => ({
+        ...group,
+        name: group.name.trim() || defaultGroupName(group)
+      }))
+      const groups = selectedPaths
+        ? selectedExportPlan(namedGroups, new Set(selectedPaths), state.prefixCopiedFileNames)
+        : namedGroups.map((group) => ({
+            id: group.id,
+            name: group.name,
+            files: group.files.map((file, index) => ({
+              sourcePath: file.path,
+              // Local full-session exports get their prefix from copyEngine
+              // (main process), driven by the `prefixCopiedFileNames` arg
+              // passed to copyStart below — applying it here too would just
+              // be redundant. Drive has no such server-side step, so it's
+              // applied here to keep Drive's ordering in step with local.
+              fileName:
+                isDrive && state.prefixCopiedFileNames
+                  ? localOrderFileName(file.fileName, index, group.files.length)
+                  : file.fileName
+            }))
+          }))
+
+      try {
+        const summary = isDrive
+          ? await window.saaraAPI.driveUploadStart(groups)
+          : await window.saaraAPI.copyStart(
+              state.destinationPath as string,
+              groups,
+              state.prefixCopiedFileNames
+            )
+        dispatch({ type: 'COPY_DONE', summary })
+      } catch (err) {
+        // Covers upfront failures with no per-file granularity to attach an error
+        // to — Drive not connected, OAuth not configured, no network at all
+        // before the first request even goes out. Without this, the UI would
+        // stay stuck on "Uploading..." forever, since nothing else clears
+        // `copying`.
+        dispatch({ type: 'COPY_ERROR', message: friendlyIpcError(err) })
+      } finally {
+        unsubscribe()
+      }
+    },
+    [
+      state.destinationType,
+      state.destinationPath,
+      state.driveStatus.connected,
+      state.groups,
+      state.prefixCopiedFileNames
+    ]
+  )
 
   const openViewer = useCallback(
     (path: string) => {
@@ -226,6 +252,10 @@ export function useImportWorkflow(): ImportWorkflow {
     dispatch({ type: 'CLEAR_SELECTION' })
   }, [])
 
+  const setSelectionPaths = useCallback((paths: string[]) => {
+    dispatch({ type: 'SET_SELECTION', paths })
+  }, [])
+
   const selectPaths = useCallback((paths: string[]) => {
     dispatch({ type: 'SELECT_PATHS', paths })
   }, [])
@@ -241,6 +271,13 @@ export function useImportWorkflow(): ImportWorkflow {
   const moveFileToIndex = useCallback(
     (path: string, targetGroupId: string, targetIndex: number) => {
       dispatch({ type: 'MOVE_FILE_TO_INDEX', path, targetGroupId, targetIndex })
+    },
+    []
+  )
+
+  const moveFilesToIndex = useCallback(
+    (paths: string[], targetGroupId: string, targetIndex: number) => {
+      dispatch({ type: 'MOVE_FILES_TO_INDEX', paths, targetGroupId, targetIndex })
     },
     []
   )
@@ -279,10 +316,12 @@ export function useImportWorkflow(): ImportWorkflow {
     viewerPrev,
     toggleSelect,
     clearSelection,
+    setSelectionPaths,
     selectPaths,
     deleteFiles,
     moveFiles,
     moveFileToIndex,
+    moveFilesToIndex,
     reorderFiles,
     createGroupAndMoveFiles,
     renameFile

@@ -17,12 +17,18 @@ export function SessionEditModal({ labelledBy, onCancel, children }: Props): Rea
     dialogRef.current?.focus()
 
     function handleKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') onCancel()
+      if (event.key !== 'Escape') return
+      // Capture phase + stopImmediatePropagation so this modal swallows Escape
+      // before it can reach a bubble-phase listener underneath it (Lightbox,
+      // HomeScreen's selection-clear) — otherwise one Escape press cascades
+      // through every open layer instead of closing just this dialog.
+      event.stopImmediatePropagation()
+      onCancel()
     }
 
-    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handleKeyDown, true)
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keydown', handleKeyDown, true)
       previouslyFocused.current?.focus?.()
     }
   }, [onCancel])
