@@ -114,6 +114,7 @@ input,
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
+  caret-color: var(--color-accent);
   color: var(--color-text);
   padding: var(--space-2);
   font-family: inherit;
@@ -404,6 +405,7 @@ body,
 .home-content {
   flex: 1;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   /* Reserves the scrollbar's width whether or not content is currently
      tall enough to need it. Without this, expanding a group grows the
@@ -499,7 +501,7 @@ input[type='number'] {
 }
 
 .dropzone-corner-button:hover {
-  color: var(--color-text);
+  color: var(--color-accent);
   border-color: var(--color-accent);
 }
 
@@ -528,7 +530,10 @@ input[type='number'] {
 .group-card-photo-grid-drop-surface {
   position: absolute;
   inset: 0;
-  pointer-events: none;
+  z-index: 0;
+  /* Tiles sit above this surface, but gaps resolve here as a real dnd-kit
+     target so the insertion bar can track the nearest tile. */
+  pointer-events: auto;
 }
 
 .group-card-photo-grid {
@@ -555,6 +560,15 @@ input[type='number'] {
 
 .group-card-photo-tile-dragging {
   opacity: 0.45;
+}
+
+.group-card-photo-tile-batch-dragging {
+  opacity: 0.28;
+  transform: scale(0.96);
+  transform-origin: center;
+  transition:
+    opacity 160ms ease,
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 /* The sort plugin is deliberately disabled because it mutates React-owned DOM.
@@ -597,6 +611,52 @@ input[type='number'] {
   height: 100%;
 }
 
+.group-card-drag-overlay-preview {
+  position: relative;
+}
+
+.group-card-drag-overlay-stack {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  transform: translate(calc(var(--stack-index) * 5px), calc(var(--stack-index) * 5px))
+    scale(calc(1 - var(--stack-index) * 0.04));
+  transform-origin: center;
+  opacity: calc(1 - var(--stack-index) * 0.16);
+  transition:
+    transform 180ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 180ms ease;
+}
+
+.photo-selection-rectangle {
+  position: fixed;
+  z-index: 20;
+  pointer-events: none;
+  border: 1px solid var(--color-accent-focus);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+/* Shift temporarily reserves the pointer for the selection gesture. Keep the
+   ordinary arrow rather than advertising a competing drag or click action. */
+.home-screen-selection-mode,
+.home-screen-selection-mode * {
+  cursor: default !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.home-screen-selection-mode .group-card-photo-delete {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#root.root-shift-selecting .group-card-photo-delete {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .group-card-drag-overlay-preview .thumb {
   object-fit: cover;
 }
@@ -611,6 +671,10 @@ input[type='number'] {
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-md);
   color: var(--color-text-muted);
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease;
 }
 
 .new-group-drop-tile-visible {
@@ -625,7 +689,15 @@ input[type='number'] {
 
 @media (prefers-reduced-motion: reduce) {
   .new-group-drop-tile {
-    transform: none !important;
+    transition:
+      border-color 100ms ease,
+      background-color 100ms ease,
+      color 100ms ease;
+  }
+
+  .group-card-photo-tile-batch-dragging {
+    transform: none;
+    transition: opacity 100ms ease;
   }
 }
 

@@ -25,7 +25,8 @@ interface Props {
   isCollapsed: boolean
   closedClipRef: RefObject<HTMLDivElement | null>
   onToggleSelect: (path: string) => void
-  onOpenViewer: (path: string) => void
+  onOpenViewer: (path: string, event: React.MouseEvent<HTMLButtonElement>) => void
+  isBatchDragging: boolean
   onRequestDelete: (path: string) => void
   onStartRename: (path: string) => void
   onCommitRename: (path: string, value: string) => void
@@ -52,6 +53,7 @@ function PhotoTileImpl({
   closedClipRef,
   onToggleSelect,
   onOpenViewer,
+  isBatchDragging,
   onRequestDelete,
   onStartRename,
   onCommitRename,
@@ -92,7 +94,7 @@ function PhotoTileImpl({
   return (
     <div
       ref={setSortableNode}
-      className={`group-card-photo-tile${selected ? ' group-card-photo-tile-selected' : ''}${isDragging ? ' group-card-photo-tile-dragging' : ''}${dropPreviewSide ? ` group-card-photo-tile-drop-preview-${dropPreviewSide}` : ''}`}
+      className={`group-card-photo-tile${selected ? ' group-card-photo-tile-selected' : ''}${isDragging ? ' group-card-photo-tile-dragging' : ''}${isBatchDragging ? ' group-card-photo-tile-batch-dragging' : ''}${dropPreviewSide ? ` group-card-photo-tile-drop-preview-${dropPreviewSide}` : ''}`}
       data-path={file.path}
       // Collapsed rows past the first are still in the DOM (height-clipped,
       // not removed) so the collapse animation has real content to grow
@@ -132,7 +134,7 @@ function PhotoTileImpl({
           type="button"
           className="thumb-open"
           ref={setDragHandle}
-          onClick={() => onOpenViewer(file.path)}
+          onClick={(event) => onOpenViewer(file.path, event)}
           aria-label={`Open ${file.fileName}`}
         >
           <Thumbnail path={file.path} mediaType={file.mediaType} />

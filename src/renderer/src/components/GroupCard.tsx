@@ -16,7 +16,8 @@ interface Props {
   onRenameFile: (path: string, fileName: string) => void
   onDelete: (paths: string[]) => void
   onToggleSelect: (path: string) => void
-  onOpenViewer: (path: string) => void
+  onOpenViewer: (path: string, event: React.MouseEvent<HTMLButtonElement>) => void
+  selectionExpand: boolean
   showLocalOrder: boolean
   dragging: {
     path: string
@@ -26,6 +27,7 @@ interface Props {
     previewPath: string | null
     previewSide: 'before' | 'after' | null
     motionVersion: number
+    paths: string[]
   } | null
 }
 
@@ -37,6 +39,7 @@ export function GroupCard({
   onDelete,
   onToggleSelect,
   onOpenViewer,
+  selectionExpand,
   showLocalOrder,
   dragging
 }: Props): React.JSX.Element {
@@ -85,6 +88,15 @@ export function GroupCard({
     }, 700)
     return () => window.clearTimeout(timeout)
   }, [isHoveringClosedGroup, dragging?.motionVersion])
+
+  useEffect(() => {
+    if (expanded || !selectionExpand) return
+    const frame = requestAnimationFrame(() => {
+      setExpanded(true)
+      requestAnimationFrame(() => measureGridRef.current())
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [expanded, selectionExpand])
 
   const handleCommitRename = useCallback(
     (path: string, value: string): void => {
@@ -216,6 +228,7 @@ export function GroupCard({
               closedClipRef={gridClipRef}
               onToggleSelect={onToggleSelect}
               onOpenViewer={onOpenViewer}
+              isBatchDragging={dragging?.paths.includes(file.path) ?? false}
               onRequestDelete={setDeletePath}
               onStartRename={setRenamingPath}
               onCommitRename={handleCommitRename}

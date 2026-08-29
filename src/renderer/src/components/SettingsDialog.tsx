@@ -188,7 +188,7 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
             Prefix copied filenames with their order in Saara
           </label>
           <p className="field-value">
-            Example: 0001_IMG_0001.JPG. Google Drive filenames stay unchanged.
+            Example: 0001_IMG_0001.JPG. Also applies to selected-photo uploads.
           </p>
         </div>
 

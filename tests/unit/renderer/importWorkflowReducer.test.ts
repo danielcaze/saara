@@ -121,6 +121,12 @@ describe('reducer: selection', () => {
     const cleared = reducer(selected, { type: 'CLEAR_SELECTION' })
     expect(cleared.selectedPaths.size).toBe(0)
   })
+
+  it('SET_SELECTION replaces the exact set of paths', () => {
+    const selected = reducer(initialState, { type: 'SET_SELECTION', paths: ['/a.jpg', '/b.jpg'] })
+    const replaced = reducer(selected, { type: 'SET_SELECTION', paths: ['/b.jpg'] })
+    expect([...replaced.selectedPaths]).toEqual(['/b.jpg'])
+  })
 })
 
 describe('reducer: DELETE_FILES', () => {
@@ -268,6 +274,28 @@ describe('reducer: CREATE_GROUP and MOVE_FILES', () => {
     expect(
       flattenGroupFiles(next.groups).filter(({ file }) => file.path === '/a.jpg')
     ).toHaveLength(1)
+  })
+
+  it('MOVE_FILES_TO_INDEX inserts a visual-order batch at the requested target index', () => {
+    const state = stateWithGroups([
+      group('g1', [file('/a.jpg'), file('/b.jpg')]),
+      group('g2', [file('/c.jpg'), file('/d.jpg')])
+    ])
+    const selected = {
+      ...state,
+      selectedPaths: new Set(['/a.jpg', '/c.jpg'])
+    }
+    const next = reducer(selected, {
+      type: 'MOVE_FILES_TO_INDEX',
+      paths: ['/c.jpg', '/a.jpg'],
+      targetGroupId: 'g2',
+      targetIndex: 1
+    })
+
+    expect(next.groups.map((entry) => entry.id)).toEqual(['g1', 'g2'])
+    expect(next.groups[0].files.map((entry) => entry.path)).toEqual(['/b.jpg'])
+    expect(next.groups[1].files.map((entry) => entry.path)).toEqual(['/d.jpg', '/a.jpg', '/c.jpg'])
+    expect(next.selectedPaths.size).toBe(0)
   })
 
   it('drops the source group once it is emptied by the move', () => {
