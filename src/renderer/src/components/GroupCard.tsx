@@ -228,7 +228,7 @@ export function GroupCard({
               closedClipRef={gridClipRef}
               onToggleSelect={onToggleSelect}
               onOpenViewer={onOpenViewer}
-              isBatchDragging={dragging?.paths.includes(file.path) ?? false}
+              isBatchDragging={!!dragging && dragging.paths.length > 1 && dragging.paths.includes(file.path)}
               onRequestDelete={setDeletePath}
               onStartRename={setRenamingPath}
               onCommitRename={handleCommitRename}

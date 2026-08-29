@@ -19,7 +19,13 @@ function focusableElements(container: HTMLElement): HTMLElement[] {
 }
 
 function closeOnEscape(event: KeyboardEvent, onClose: () => void): void {
-  if (event.key === 'Escape') onClose()
+  if (event.key !== 'Escape') return
+  // Capture phase + stopImmediatePropagation so this dialog swallows Escape
+  // before it reaches HomeScreen's bubble-phase Escape listener underneath,
+  // which would otherwise also clear the photo selection in the same
+  // keypress used to close Settings.
+  event.stopImmediatePropagation()
+  onClose()
 }
 
 function moveFocusToEnd(event: KeyboardEvent, first: HTMLElement, last: HTMLElement): boolean {
@@ -113,10 +119,10 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
     const handleFocusTrap = (event: KeyboardEvent): void =>
       keepFocusInDialog(event, dialogRef.current)
 
-    window.addEventListener('keydown', handleEscape)
+    window.addEventListener('keydown', handleEscape, true)
     window.addEventListener('keydown', handleFocusTrap)
     return () => {
-      window.removeEventListener('keydown', handleEscape)
+      window.removeEventListener('keydown', handleEscape, true)
       window.removeEventListener('keydown', handleFocusTrap)
       previouslyFocused.current?.focus?.()
     }
@@ -177,7 +183,7 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
         </div>
 
         <div className="settings-dialog-field">
-          <label htmlFor="prefix-copied-file-names">Local file order</label>
+          <label htmlFor="prefix-copied-file-names">File order</label>
           <label className="settings-dialog-checkbox" htmlFor="prefix-copied-file-names">
             <input
               id="prefix-copied-file-names"
@@ -187,9 +193,7 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
             />
             Prefix copied filenames with their order in Saara
           </label>
-          <p className="field-value">
-            Example: 0001_IMG_0001.JPG. Also applies to selected-photo uploads.
-          </p>
+          <p className="field-value">Example: 0001_IMG_0001.JPG</p>
         </div>
 
         {driveStatus.connected && (
@@ -225,9 +229,6 @@ export function SettingsDialog({ workflow, onClose }: Props): React.JSX.Element 
         </div>
 
         <div className="modal-actions">
-          <button type="button" className="modal-secondary" onClick={onClose}>
-            Cancel
-          </button>
           <button
             type="button"
             className="primary"

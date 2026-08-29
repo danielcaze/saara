@@ -172,6 +172,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
   const selectionBoxRef = useRef<SelectionBox | null>(null)
   const selectionPointerRef = useRef<{ x: number; y: number } | null>(null)
   const selectionStartPathsRef = useRef<Set<string> | null>(null)
+  const selectionTouchedPathsRef = useRef<Set<string>>(new Set())
   const homeContentRef = useRef<HTMLDivElement>(null)
 
   const totalFiles = state.groups.reduce((sum, g) => sum + g.files.length, 0)
@@ -241,14 +242,15 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
     if (subView !== 'reviewing') return
 
     function handleKeyDown(e: KeyboardEvent): void {
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+
       if (e.key === 'Escape' && state.selectedPaths.size > 0) {
         e.preventDefault()
         clearSelection()
         return
       }
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'a') return
-      const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
 
       e.preventDefault()
       // Ctrl/Cmd+A selects everything visible in the last-clicked group when
@@ -493,8 +495,19 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
         })
         .map((tile) => tile.dataset.path)
         .filter((path): path is string => Boolean(path))
-      const preserved = selectionStartPathsRef.current ?? new Set<string>()
-      setSelectionPaths([...new Set([...preserved, ...paths])])
+      const boxPaths = new Set(paths)
+      const touched = selectionTouchedPathsRef.current
+      boxPaths.forEach((path) => touched.add(path))
+      const original = selectionStartPathsRef.current ?? new Set<string>()
+      // A tile the box has ever touched this drag is governed by whether the
+      // box currently covers it (so it un-selects the moment the box leaves,
+      // even if it was selected before the drag started). A tile the box
+      // never touched keeps its pre-drag selection state untouched.
+      const result = new Set(boxPaths)
+      original.forEach((path) => {
+        if (!touched.has(path)) result.add(path)
+      })
+      setSelectionPaths([...result])
     },
     [setSelectionPaths]
   )
@@ -522,6 +535,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
       selectionBoxRef.current = box
       selectionPointerRef.current = { x: event.clientX, y: event.clientY }
       selectionStartPathsRef.current = new Set(state.selectedPaths)
+      selectionTouchedPathsRef.current = new Set()
 
       const onMove = (move: PointerEvent): void => {
         const current = selectionBoxRef.current
@@ -546,6 +560,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
         selectionBoxRef.current = null
         selectionPointerRef.current = null
         selectionStartPathsRef.current = null
+        selectionTouchedPathsRef.current = new Set()
         setSelectionBox(null)
         setSelectionHoveringGroupId(null)
         setSelectionExpandGroupId(null)
@@ -599,8 +614,7 @@ export function HomeScreen({ workflow, onOpenSettings }: Props): React.JSX.Eleme
       if (!point) return
       const scroller = homeContentRef.current
       if (!scroller) return
-      const bounds =
-        document.getElementById('root')?.getBoundingClientRect() ?? scroller.getBoundingClientRect()
+      const bounds = scroller.getBoundingClientRect()
       const edge = 52
       const distance =
         point.y < bounds.top + edge

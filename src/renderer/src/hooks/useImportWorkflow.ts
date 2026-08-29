@@ -8,6 +8,7 @@ import {
   type State
 } from './importWorkflowReducer'
 import { selectedExportPlan } from '../../../shared/selectedExportPlan'
+import { localOrderFileName } from '../../../shared/localOrderFileName'
 
 // Electron's ipcRenderer.invoke wraps main-process errors as
 // `Error invoking remote method '<channel>': Error: <original message>` —
@@ -177,7 +178,18 @@ export function useImportWorkflow(): ImportWorkflow {
         : namedGroups.map((group) => ({
             id: group.id,
             name: group.name,
-            files: group.files.map((file) => ({ sourcePath: file.path, fileName: file.fileName }))
+            files: group.files.map((file, index) => ({
+              sourcePath: file.path,
+              // Local full-session exports get their prefix from copyEngine
+              // (main process), driven by the `prefixCopiedFileNames` arg
+              // passed to copyStart below — applying it here too would just
+              // be redundant. Drive has no such server-side step, so it's
+              // applied here to keep Drive's ordering in step with local.
+              fileName:
+                isDrive && state.prefixCopiedFileNames
+                  ? localOrderFileName(file.fileName, index, group.files.length)
+                  : file.fileName
+            }))
           }))
 
       try {

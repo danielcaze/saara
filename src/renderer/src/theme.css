@@ -712,7 +712,7 @@ input[type='number'] {
 .thumb-select {
   position: absolute;
   top: var(--space-1);
-  left: var(--space-1);
+  right: var(--space-1);
   z-index: 1;
   display: flex;
   align-items: center;
@@ -793,8 +793,8 @@ input[type='number'] {
 .group-card-photo-delete {
   position: absolute;
   z-index: 2;
-  right: var(--space-1);
-  bottom: var(--space-1);
+  left: var(--space-1);
+  top: var(--space-1);
   padding: var(--space-1);
   background: rgba(5, 5, 5, 0.7);
   opacity: 0;

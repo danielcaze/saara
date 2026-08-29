@@ -185,7 +185,10 @@ describe('runDriveUploadPlan', () => {
       { rootFolderId: root.id, groups: [oneGroup[0]] },
       (e) => progress.push(e),
       flaky,
-      { wait: instantWait }
+      // Forces the two files through one at a time — the shared `attempts`
+      // counter above only produces the deterministic 3-then-1 retry
+      // pattern when uploads can't interleave.
+      { wait: instantWait, concurrency: 1 }
     )
 
     expect(summary.copiedFiles).toBe(2)
